@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="manifest" href="/site.webmanifest">
+<title>Print QR Codes — Housekeeping</title>
+<link rel="stylesheet" href="/css/design-system.css">
+<style>
+.qr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1.5rem;padding:1rem 0}
+.qr-item{text-align:center;page-break-inside:avoid;break-inside:avoid;border:1px solid var(--border);border-radius:var(--radius);padding:1rem;background:var(--surface)}
+.qr-item svg,.qr-item img{width:160px;height:160px;margin:0 auto .5rem}
+.qr-label{font-size:.8rem;font-weight:600;color:var(--text)}
+.qr-type{font-size:.7rem;color:var(--text-muted)}
+.print-bar{position:sticky;top:56px;background:var(--bg);padding:.75rem 0;z-index:10;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);margin-bottom:1rem}
+@media print{
+  .topbar,.sa-banner,.print-bar{display:none!important}
+  body{background:#fff}
+  .qr-grid{grid-template-columns:repeat(3,1fr);gap:1rem}
+  .qr-item{border:1px solid #ccc;padding:.5rem}
+  .qr-item svg,.qr-item img{width:120px;height:120px}
+}
+</style>
+</head>
+<body>
+<nav class="topbar">
+  <div class="topbar-left">
+    <button class="nav-toggle" id="nav-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg></button>
+    <span class="topbar-brand">Housekeeping</span>
+    <div class="topbar-nav" id="topbar-nav"></div>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-user" id="userName"></span>
+    <button class="btn btn-sm btn-ghost" onclick="App.logout()">Logout</button>
+  </div>
+</nav>
+<div class="sa-banner" id="sa-banner"></div>
+
+<main class="container">
+  <div class="print-bar">
+    <span id="countLabel" style="font-size:.9rem;color:var(--text-muted)">Loading QR codes…</span>
+    <button class="btn btn-primary" onclick="window.print()" style="display:inline-flex;align-items:center;gap:.35rem"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Print All</button>
+  </div>
+  <div id="qrGrid" class="qr-grid"></div>
+</main>
+
+<script src="/js/app.js"></script>
+<script>
+// If sessionStorage is empty, wait for session transfer from opener
+(function() {
+  var _booted = false;
+  function safeBoot() { if (!_booted) { _booted = true; boot(); } }
+
+  if (sessionStorage.getItem('token')) { safeBoot(); return; }
+  // Listen for session data via postMessage from parent window
+  function onMessage(e) {
+    if (e.origin !== location.origin) return;
+    if (e.data && e.data.type === 'session-transfer' && e.data.data) {
+      var d = e.data.data;
+      for (var k in d) { if (d.hasOwnProperty(k)) sessionStorage.setItem(k, d[k]); }
+      window.removeEventListener('message', onMessage);
+      safeBoot();
+    }
+  }
+  window.addEventListener('message', onMessage);
+  // Timeout: if no message received in 5s, redirect to login
+  setTimeout(function() {
+    if (!sessionStorage.getItem('token')) {
+      window.removeEventListener('message', onMessage);
+      location.href = '/admin-login';
+    }
+  }, 5000);
+})();
+
+function boot() {
+  if (!App.initAdmin('locations')) return;
+  App.initNotifications(App.apiFetch);
+  loadQRCodes();
+}
+
+var esc = App.esc, $ = App.$;
+
+async function loadQRCodes() {
+  var res = await App.apiFetch('/locations/tree?active=true');
+  if (!res) return;
+  var tree = await res.json();
+  if (!Array.isArray(tree)) { $('qrGrid').innerHTML = '<div class="empty">No locations found</div>'; return; }
+
+  var locations = [];
+  var CONTAINER_TYPES = ['BUILDING', 'FLOOR'];
+  function flatten(nodes, prefix) {
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      if (CONTAINER_TYPES.indexOf(n.type) === -1) {
+        locations.push({ id: n.id, name: n.name, fullName: prefix + n.name, type: n.type, qrCode: n.qrCode });
+      }
+      if (n.children && n.children.length) flatten(n.children, prefix + n.name + ' → ');
+    }
+  }
+  flatten(tree, '');
+  $('countLabel').textContent = locations.length + ' location' + (locations.length !== 1 ? 's' : '');
+
+  // Batch fetch QR codes in groups of 5
+  var BATCH = 5;
+  for (var b = 0; b < locations.length; b += BATCH) {
+    var batch = locations.slice(b, b + BATCH);
+    var promises = batch.map(function(loc) {
+      return App.apiFetch('/locations/' + loc.id + '/qr-image').then(function(r) {
+        if (r && r.ok) return r.text().then(function(svg) { return { loc: loc, svg: svg }; });
+        return { loc: loc, svg: null };
+      }).catch(function() { return { loc: loc, svg: null }; });
+    });
+    var results = await Promise.all(promises);
+    for (var i = 0; i < results.length; i++) {
+      var r = results[i];
+      var div = document.createElement('div');
+      div.className = 'qr-item';
+      div.innerHTML = (r.svg || '<div style="width:160px;height:160px;background:#f1f5f9;border-radius:8px;margin:0 auto .5rem;display:flex;align-items:center;justify-content:center;color:#94a3b8">No QR</div>') +
+        '<div class="qr-label">' + esc(r.loc.name) + '</div>' +
+        '<div class="qr-type">' + r.loc.type + '</div>' +
+        (r.loc.qrCode ? '<div style="font-family:monospace;font-size:.75rem;color:#0ea5a4;font-weight:700;letter-spacing:.5px;margin-top:.2rem">Code: ' + esc(r.loc.qrCode) + '</div>' : '') +
+        '<div style="font-size:.6rem;color:#64748b;margin-top:.4rem;line-height:1.3;border-top:1px dashed #e2e8f0;padding-top:.35rem"><b>Scan this QR:</b><br>Staff \u2192 Clean &nbsp;|&nbsp; Guest \u2192 Report Issue</div>';
+      $('qrGrid').appendChild(div);
+    }
+  }
+}
+</script>
+</body>
+</html>

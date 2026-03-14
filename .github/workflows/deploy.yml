@@ -1,0 +1,90 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GCP VM
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          NODE_ENV: production
+          PORT: "3000"
+          APP_URL: ${{ secrets.APP_URL }}
+          COOKIE_DOMAIN: ${{ secrets.COOKIE_DOMAIN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          COOKIE_SECRET: ${{ secrets.COOKIE_SECRET }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          CORS_ORIGINS: ${{ secrets.CORS_ORIGINS }}
+          SES_SMTP_HOST: ${{ secrets.SES_SMTP_HOST }}
+          SES_SMTP_USER: ${{ secrets.SES_SMTP_USER }}
+          SES_SMTP_PASS: ${{ secrets.SES_SMTP_PASS }}
+          SES_FROM_EMAIL: ${{ secrets.SES_FROM_EMAIL }}
+        with:
+          host: ${{ secrets.GCP_HOST }}
+          username: ${{ secrets.GCP_USERNAME }}
+          key: ${{ secrets.GCP_SSH_PRIVATE_KEY }}
+          timeout: 30m
+          command_timeout: 30m
+          envs: NODE_ENV,PORT,APP_URL,COOKIE_DOMAIN,DATABASE_URL,DB_USER,DB_PASSWORD,DB_NAME,JWT_SECRET,COOKIE_SECRET,ADMIN_KEY,R2_ACCOUNT_ID,R2_ACCESS_KEY_ID,R2_SECRET_ACCESS_KEY,R2_BUCKET_NAME,CORS_ORIGINS,SES_SMTP_HOST,SES_SMTP_USER,SES_SMTP_PASS,SES_FROM_EMAIL
+          script: |
+            cd ~/housekeeping-platform
+            git pull origin main
+
+            # Write .env securely from environment variables
+            cat > .env << EOF
+            NODE_ENV=${NODE_ENV}
+            PORT=${PORT}
+            APP_URL=${APP_URL}
+            COOKIE_DOMAIN=${COOKIE_DOMAIN}
+            DATABASE_URL=${DATABASE_URL}
+            DB_USER=${DB_USER}
+            DB_PASSWORD=${DB_PASSWORD}
+            DB_NAME=${DB_NAME}
+            JWT_SECRET=${JWT_SECRET}
+            COOKIE_SECRET=${COOKIE_SECRET}
+            ADMIN_KEY=${ADMIN_KEY}
+            R2_ACCOUNT_ID=${R2_ACCOUNT_ID}
+            R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
+            R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
+            R2_BUCKET_NAME=${R2_BUCKET_NAME}
+            CORS_ORIGINS=${CORS_ORIGINS}
+            SES_SMTP_HOST=${SES_SMTP_HOST}
+            SES_SMTP_USER=${SES_SMTP_USER}
+            SES_SMTP_PASS=${SES_SMTP_PASS}
+            SES_FROM_EMAIL=${SES_FROM_EMAIL}
+            EOF
+
+            chmod 600 .env
+
+            # Deploy with Docker Compose
+            docker compose pull
+            docker compose up -d --build --remove-orphans
+
+            # Wait for services to be healthy
+            echo "Waiting for services to start..."
+            sleep 30
+
+            # Verify deployment
+            docker compose ps
+
+            # Health check — fail deploy if API is not responding
+            echo "Running health check..."
+            docker compose exec -T api wget -qO- http://127.0.0.1:3000/health || {
+              echo "❌ Health check FAILED!"
+              docker compose logs --tail 50 api
+              exit 1
+            }
+            echo "✅ Deployment successful!"

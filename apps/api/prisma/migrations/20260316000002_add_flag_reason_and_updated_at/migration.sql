@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "CleaningRecord" ADD COLUMN "flagReason" TEXT;
+ALTER TABLE "CleaningRecord" ADD COLUMN "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;

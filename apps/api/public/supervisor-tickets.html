@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="manifest" href="/site.webmanifest">
+<title>My Tickets — Supervisor</title>
+<link rel="stylesheet" href="/css/design-system.css">
+<style>
+.sv-shell{max-width:640px;margin:0 auto;padding:1rem .75rem;min-height:calc(100dvh - 56px)}
+
+/* Quick-stats row */
+.sv-stats{display:flex;gap:.4rem;margin-bottom:.85rem}
+.sv-stat{flex:1;text-align:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.55rem .35rem}
+.sv-stat-val{font-size:1.2rem;font-weight:700;line-height:1}
+.sv-stat-lbl{font-size:.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-top:.15rem}
+.sv-stat.urgent .sv-stat-val{color:#ef4444}
+.sv-stat.open .sv-stat-val{color:#f59e0b}
+.sv-stat.progress .sv-stat-val{color:var(--primary)}
+.sv-stat.done .sv-stat-val{color:var(--success)}
+
+/* Tabs */
+.sv-tabs{display:flex;gap:.25rem;margin-bottom:.85rem;background:var(--surface);border-radius:var(--radius);padding:.2rem;border:1px solid var(--border)}
+.sv-tab{flex:1;text-align:center;padding:.5rem .35rem;font-size:.8rem;font-weight:600;border-radius:var(--radius-sm);cursor:pointer;color:var(--text-muted);transition:all .15s;border:none;background:none;min-height:var(--touch-min);position:relative}
+.sv-tab.active{background:var(--primary);color:#fff}
+.sv-tab .tab-count{display:inline-block;min-width:16px;padding:0 4px;border-radius:8px;font-size:.62rem;margin-left:.2rem;background:rgba(255,255,255,.2);line-height:1.6}
+.sv-tab:not(.active) .tab-count{background:var(--bg)}
+.sv-tab .tab-dot{position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:50%;background:#ef4444;display:none}
+
+/* Ticket cards */
+.tk-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:.85rem 1rem;margin-bottom:.6rem;cursor:pointer;transition:border-color .15s,box-shadow .1s;position:relative}
+.tk-card:active{border-color:var(--primary)}
+.tk-card:hover{box-shadow:var(--shadow-sm)}
+.tk-card.urgent-card{border-left:3px solid #ef4444}
+.tk-card.high-card{border-left:3px solid #f97316}
+.tk-header{display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem;margin-bottom:.35rem}
+.tk-title{font-size:.88rem;font-weight:700;color:var(--text);line-height:1.3}
+.tk-priority{font-size:.62rem;font-weight:700;padding:.12rem .4rem;border-radius:var(--radius-sm);flex-shrink:0;text-transform:uppercase;letter-spacing:.03em}
+.tk-priority.urgent{background:rgba(239,68,68,.15);color:#f87171}
+.tk-priority.high{background:rgba(249,115,22,.15);color:#fb923c}
+.tk-priority.normal{background:rgba(14,165,164,.15);color:var(--primary)}
+.tk-priority.low{background:var(--bg);color:var(--text-muted)}
+.tk-meta{display:flex;flex-wrap:wrap;gap:.3rem .7rem;font-size:.72rem;color:var(--text-muted)}
+.tk-meta span{display:inline-flex;align-items:center;gap:.15rem}
+.tk-source{font-size:.58rem;font-weight:700;padding:.08rem .3rem;border-radius:3px;background:rgba(59,130,246,.15);color:#60a5fa;vertical-align:middle;margin-left:.2rem}
+.tk-img-row{display:flex;gap:.35rem;margin-top:.4rem}
+.tk-img-thumb{width:40px;height:40px;border-radius:var(--radius-sm);object-fit:cover;border:1px solid var(--border)}
+
+/* Empty state */
+.sv-empty{text-align:center;padding:2.5rem 1rem;color:var(--text-muted)}
+.sv-empty-icon{font-size:2.5rem;margin-bottom:.5rem;display:block;opacity:.7}
+
+/* Detail view */
+.tk-detail{display:none}
+.tk-detail.show{display:block}
+.tk-detail-back{display:inline-flex;align-items:center;gap:.3rem;font-size:.82rem;color:var(--primary);cursor:pointer;margin-bottom:.75rem;background:none;border:none;font-weight:600;min-height:var(--touch-min);padding:0}
+.tk-detail-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
+.tk-detail-top{padding:1.15rem}
+.tk-detail-title{font-size:1.05rem;font-weight:700;margin-bottom:.5rem;line-height:1.3}
+
+/* Status badge row */
+.tk-status-row{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:.65rem}
+
+/* Info grid */
+.tk-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:.35rem .5rem;font-size:.8rem;margin-bottom:.65rem}
+.tk-info-item{display:flex;flex-direction:column;gap:.05rem}
+.tk-info-label{font-size:.62rem;color:var(--text-muted);text-transform:uppercase;font-weight:600;letter-spacing:.03em}
+.tk-info-val{color:var(--text);word-break:break-word}
+
+.tk-detail-desc{background:var(--bg);border-radius:var(--radius);padding:.7rem;margin-top:.6rem;font-size:.82rem;color:var(--text);line-height:1.5;border:1px solid var(--border)}
+.tk-detail-img{width:100%;max-height:280px;object-fit:contain;background:var(--bg);border-top:1px solid var(--border);cursor:pointer}
+
+/* Guest info */
+.tk-guest{background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.15);border-radius:var(--radius);padding:.65rem;margin-top:.65rem}
+.tk-guest-title{font-size:.65rem;color:#3b82f6;text-transform:uppercase;font-weight:700;letter-spacing:.04em;margin-bottom:.3rem}
+.tk-guest-row{font-size:.8rem;color:var(--text);margin:.12rem 0}
+
+/* Resolve section */
+.tk-resolve{background:var(--bg);border-radius:var(--radius);padding:.85rem;margin-top:.65rem;border:1px solid var(--border)}
+.tk-resolve h4{font-size:.88rem;font-weight:700;margin-bottom:.35rem;color:var(--text)}
+.tk-resolve-hint{font-size:.75rem;color:var(--text-muted);margin-bottom:.5rem}
+.resolve-photo-area{border:2px dashed var(--border);border-radius:var(--radius);padding:.85rem;text-align:center;margin-bottom:.5rem;transition:border-color .15s}
+.resolve-photo-area.has-photo{border-color:var(--success);background:rgba(16,185,129,.04)}
+.resolve-preview{width:100%;max-height:180px;object-fit:contain;border-radius:var(--radius-sm);display:none;margin-top:.4rem}
+.resolve-photo-label{display:inline-flex;align-items:center;gap:.3rem;font-size:.82rem;cursor:pointer;color:var(--text-muted);padding:.4rem .7rem;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);min-height:var(--touch-min);transition:border-color .15s}
+.resolve-photo-label:hover{border-color:var(--primary);color:var(--primary)}
+
+/* Resolution display */
+.tk-resolution{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:var(--radius);padding:.75rem;margin-top:.65rem}
+[data-theme="dark"] .tk-resolution{background:rgba(16,185,129,.08);border-color:rgba(16,185,129,.2)}
+.tk-resolution h4{font-size:.78rem;font-weight:700;color:#15803d;margin-bottom:.35rem}
+[data-theme="dark"] .tk-resolution h4{color:#34d399}
+.tk-resolution img{width:100%;max-height:180px;object-fit:contain;border-radius:var(--radius-sm);margin-top:.3rem;cursor:pointer}
+.tk-resolution p{font-size:.8rem;color:#166534;margin-top:.25rem}
+[data-theme="dark"] .tk-resolution p{color:#86efac}
+
+/* Actions bar */
+.tk-actions{padding:.85rem 1.15rem;border-top:1px solid var(--border);display:flex;gap:.5rem;flex-wrap:wrap}
+
+/* Refresh hint */
+.sv-refresh{display:inline-flex;align-items:center;gap:.2rem;font-size:.72rem;color:var(--text-light);cursor:pointer;padding:.25rem .5rem;border-radius:var(--radius-sm);transition:color .15s}
+.sv-refresh:hover{color:var(--primary)}
+
+@media(max-width:480px){
+  .sv-shell{padding:.6rem .5rem}
+  .tk-card{padding:.75rem .8rem}
+  .tk-detail-top{padding:.85rem}
+  .tk-actions{padding:.75rem .85rem}
+  .sv-tab{font-size:.74rem;padding:.4rem .25rem}
+  .tk-info-grid{gap:.25rem .35rem;font-size:.75rem}
+  .sv-stats{gap:.3rem}
+  .sv-stat{padding:.4rem .2rem}
+  .sv-stat-val{font-size:1rem}
+}
+</style>
+</head>
+<body>
+<nav class="topbar">
+  <div class="topbar-left">
+    <span class="topbar-brand">Housekeeping</span>
+    <div class="sv-nav">
+      <a href="/supervisor-scan" class="sv-nav-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 012-2h2"/><path d="M17 3h2a2 2 0 012 2v2"/><path d="M21 17v2a2 2 0 01-2 2h-2"/><path d="M7 21H5a2 2 0 01-2-2v-2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>Scan</a>
+      <a href="/supervisor-tickets" class="sv-nav-link active"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 5H9a2 2 0 00-2 2v10a2 2 0 002 2h6a2 2 0 002-2V7a2 2 0 00-2-2z"/><path d="M12 11h.01"/><path d="M12 15h.01"/></svg>Tickets</a>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-user" id="userName"></span>
+    <button class="btn btn-sm btn-ghost" onclick="App.logoutSup()">Logout</button>
+  </div>
+</nav>
+
+<div class="sv-shell">
+  <!-- List View -->
+  <div id="listView">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem">
+      <h2 style="font-size:1.05rem;font-weight:700;margin:0">My Tickets</h2>
+      <div class="sv-refresh" onclick="loadTickets()" title="Refresh"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg> Refresh</div>
+    </div>
+
+    <!-- Quick stats -->
+    <div class="sv-stats">
+      <div class="sv-stat urgent"><div class="sv-stat-val" id="statUrgent">–</div><div class="sv-stat-lbl">Urgent</div></div>
+      <div class="sv-stat open"><div class="sv-stat-val" id="statOpen">–</div><div class="sv-stat-lbl">Open</div></div>
+      <div class="sv-stat progress"><div class="sv-stat-val" id="statInProgress">–</div><div class="sv-stat-lbl">Active</div></div>
+      <div class="sv-stat done"><div class="sv-stat-val" id="statDone">–</div><div class="sv-stat-lbl">Done</div></div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="sv-tabs" id="tabs">
+      <button class="sv-tab active" data-status="OPEN" onclick="switchTab('OPEN')">Open <span class="tab-count" id="countOpen">0</span><span class="tab-dot" id="dotOpen"></span></button>
+      <button class="sv-tab" data-status="IN_PROGRESS" onclick="switchTab('IN_PROGRESS')">Active <span class="tab-count" id="countProgress">0</span></button>
+      <button class="sv-tab" data-status="done" onclick="switchTab('done')">Done <span class="tab-count" id="countDone">0</span></button>
+    </div>
+
+    <div id="ticketList"></div>
+  </div>
+
+  <!-- Detail View -->
+  <div class="tk-detail" id="detailView">
+    <button class="tk-detail-back" onclick="showList()">← Back to tickets</button>
+    <div class="tk-detail-card" id="detailCard"></div>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox-overlay" id="lightbox" onclick="closeLightbox()">
+  <button class="lightbox-close" onclick="event.stopPropagation();closeLightbox()" aria-label="Close">×</button>
+  <img class="lightbox-img" id="lightboxImg" onclick="event.stopPropagation()">
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+if (!App.initSupervisor()) throw '';
+App.initNotifications(App.supFetch, 'supervisor');
+var esc = App.esc, $ = App.$;
+var allTickets = [];
+var activeTab = 'OPEN';
+
+async function loadTickets() {
+  App.showSkeletonCards('ticketList', 3);
+  var res = await App.supFetch('/tickets?limit=100');
+  if (!res) return;
+  var data = await res.json();
+  allTickets = data.tickets || [];
+  updateCounts();
+  renderList();
+}
+
+function updateCounts() {
+  var open = 0, progress = 0, done = 0, urgent = 0;
+  for (var i = 0; i < allTickets.length; i++) {
+    var t = allTickets[i];
+    if (t.status === 'OPEN') { open++; if (t.priority === 'URGENT' || t.priority === 'HIGH') urgent++; }
+    else if (t.status === 'IN_PROGRESS') progress++;
+    else done++;
+  }
+  $('countOpen').textContent = open;
+  $('countProgress').textContent = progress;
+  $('countDone').textContent = done;
+  $('statUrgent').textContent = urgent;
+  $('statOpen').textContent = open;
+  $('statInProgress').textContent = progress;
+  $('statDone').textContent = done;
+  var dotEl = $('dotOpen');
+  if (dotEl) dotEl.style.display = urgent > 0 ? 'block' : 'none';
+}
+
+function switchTab(tab) {
+  activeTab = tab;
+  var btns = document.querySelectorAll('.sv-tab');
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].classList.toggle('active', btns[i].dataset.status === tab);
+  }
+  renderList();
+}
+
+function renderList() {
+  var filtered = allTickets.filter(function(t) {
+    if (activeTab === 'done') return t.status === 'RESOLVED' || t.status === 'CLOSED';
+    return t.status === activeTab;
+  });
+  // Sort: urgent/high first, then newest first
+  filtered.sort(function(a, b) {
+    var pr = { URGENT: 0, HIGH: 1, NORMAL: 2, LOW: 3 };
+    var pa = pr[a.priority] || 2, pb = pr[b.priority] || 2;
+    if (pa !== pb) return pa - pb;
+    return new Date(b.createdAt) - new Date(a.createdAt);
+  });
+
+  if (!filtered.length) {
+    var msgs = { OPEN: 'No open tickets assigned to you', IN_PROGRESS: 'No tickets in progress', done: 'No resolved tickets yet' };
+    var icons = {
+      OPEN: '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.5"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>',
+      IN_PROGRESS: '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+      done: '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="1.5" style="opacity:.5"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>'
+    };
+    $('ticketList').innerHTML = '<div class="sv-empty">' + (icons[activeTab] || icons.OPEN) + '<p style="margin-top:.5rem">' + esc(msgs[activeTab]) + '</p></div>';
+    return;
+  }
+
+  $('ticketList').innerHTML = filtered.map(function(t) {
+    var priCls = t.priority.toLowerCase();
+    var cardCls = (t.priority === 'URGENT') ? ' urgent-card' : (t.priority === 'HIGH') ? ' high-card' : '';
+    var src = t.source === 'PUBLIC' ? '<span class="tk-source">QR</span>' : '';
+    var timeAgo = getTimeAgo(t.createdAt);
+    var locName = t.location ? t.location.name : '—';
+    var imgThumb = t.imageUrl ? '<div class="tk-img-row"><img class="tk-img-thumb" src="' + esc(App.imgUrl(t.imageUrl)) + '" loading="lazy"></div>' : '';
+    return '<div class="tk-card' + cardCls + '" onclick="showDetail(\'' + t.id + '\')">' +
+      '<div class="tk-header"><div class="tk-title">' + esc(t.title) + src + '</div>' +
+      '<span class="tk-priority ' + priCls + '">' + t.priority + '</span></div>' +
+      '<div class="tk-meta"><span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg> ' + esc(locName) + '</span><span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> ' + timeAgo + '</span></div>' +
+      imgThumb +
+    '</div>';
+  }).join('');
+}
+
+function getTimeAgo(dateStr) {
+  var ms = Date.now() - new Date(dateStr).getTime();
+  var mins = Math.floor(ms / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return mins + 'm ago';
+  var hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h ago';
+  var days = Math.floor(hrs / 24);
+  if (days < 7) return days + 'd ago';
+  return App.fmtDateShort(dateStr);
+}
+
+async function showDetail(id) {
+  $('listView').style.display = 'none';
+  $('detailView').classList.add('show');
+  $('detailCard').innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text-muted)">Loading…</div>';
+
+  var res = await App.supFetch('/tickets/' + id);
+  if (!res || !res.ok) { showList(); App.toast('Ticket not found', 'error'); return; }
+  var t = await res.json();
+
+  var priCls = t.priority.toLowerCase();
+  var statCls = t.status === 'OPEN' ? 'badge-danger' : t.status === 'IN_PROGRESS' ? 'badge-warning' : t.status === 'RESOLVED' ? 'badge-success' : 'badge-muted';
+  var srcBadge = t.source === 'PUBLIC' ? ' <span class="tk-source" style="font-size:.6rem">Public QR</span>' : '';
+
+  var html = '<div class="tk-detail-top">';
+  html += '<div class="tk-detail-title">' + esc(t.title) + srcBadge + '</div>';
+  html += '<div class="tk-status-row">';
+  html += '<span class="badge ' + statCls + '">' + t.status.replace('_', ' ') + '</span>';
+  html += '<span class="tk-priority ' + priCls + '" style="font-size:.68rem">' + t.priority + '</span>';
+  html += '</div>';
+
+  html += '<div class="tk-info-grid">';
+  html += '<div class="tk-info-item"><span class="tk-info-label">Location</span><span class="tk-info-val">' + esc(t.location ? t.location.name : '—') + '</span></div>';
+  html += '<div class="tk-info-item"><span class="tk-info-label">Created</span><span class="tk-info-val">' + App.fmtDate(t.createdAt) + '</span></div>';
+  if (t.createdBy) {
+    html += '<div class="tk-info-item"><span class="tk-info-label">Reported by</span><span class="tk-info-val">' + esc(t.createdBy.name) + '</span></div>';
+  }
+  if (t.resolvedAt) {
+    html += '<div class="tk-info-item"><span class="tk-info-label">Resolved</span><span class="tk-info-val">' + App.fmtDate(t.resolvedAt) + '</span></div>';
+  }
+  html += '</div>';
+
+  if (t.description) {
+    html += '<div class="tk-detail-desc">' + esc(t.description) + '</div>';
+  }
+
+  if (t.source === 'PUBLIC') {
+    html += '<div class="tk-guest">';
+    html += '<div class="tk-guest-title">Guest Complaint</div>';
+    html += '<div class="tk-guest-row"><b>Name:</b> ' + esc(t.guestName || 'Anonymous') + '</div>';
+    if (t.guestPhone) html += '<div class="tk-guest-row"><b>Phone:</b> ' + esc(t.guestPhone) + '</div>';
+    if (t.issueType) html += '<div class="tk-guest-row"><b>Issue:</b> ' + esc(t.issueType.replace(/_/g, ' ')) + '</div>';
+    html += '</div>';
+  }
+
+  html += '</div>';
+
+  if (t.imageUrl) {
+    html += '<img class="tk-detail-img" src="' + esc(App.imgUrl(t.imageUrl)) + '" onclick="openLightbox(this.src)" loading="lazy" alt="Complaint photo">';
+  }
+
+  if (t.resolvedImageUrl || t.resolvedNote) {
+    html += '<div style="padding:0 1.15rem"><div class="tk-resolution">';
+    html += '<h4><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="vertical-align:-2px"><polyline points="20 6 9 17 4 12"/></svg> Resolution</h4>';
+    if (t.resolvedNote) html += '<p>' + esc(t.resolvedNote) + '</p>';
+    if (t.resolvedImageUrl) html += '<img src="' + esc(App.imgUrl(t.resolvedImageUrl)) + '" onclick="openLightbox(this.src)" loading="lazy" alt="Resolution proof">';
+    if (t.resolvedAt) html += '<p style="font-size:.7rem;margin-top:.3rem;opacity:.7">Resolved ' + App.fmtDate(t.resolvedAt) + '</p>';
+    html += '</div></div>';
+  }
+
+  html += '<div class="tk-actions" id="ticketActions">';
+  if (t.status === 'OPEN') {
+    html += '<button class="btn btn-primary btn-block" onclick="acceptTicket(\'' + t.id + '\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="vertical-align:-2px"><polyline points="20 6 9 17 4 12"/></svg> Accept &amp; Start Work</button>';
+  } else if (t.status === 'IN_PROGRESS') {
+    html += '<div style="width:100%"><div class="tk-resolve">';
+    html += '<h4>Resolve This Ticket</h4>';
+    html += '<p class="tk-resolve-hint">Take a photo proving the issue is fixed.</p>';
+    html += '<div class="resolve-photo-area" id="resolvePhotoArea">';
+    html += '<label class="resolve-photo-label" for="resolvePhoto"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg> Take / Upload proof photo</label>';
+    html += '<input type="file" id="resolvePhoto" accept="image/jpeg,image/png,image/webp" capture="environment" style="display:none" onchange="previewResolvePhoto()">';
+    html += '<img class="resolve-preview" id="resolvePreview">';
+    html += '</div>';
+    html += '<div class="form-group" style="margin-bottom:.5rem"><textarea class="form-textarea" id="resolveNote" placeholder="Resolution notes (optional)…" rows="2" maxlength="500" style="font-size:.82rem"></textarea></div>';
+    html += '<button class="btn btn-success btn-block" id="resolveBtn" onclick="resolveTicket(\'' + t.id + '\')" disabled>Upload proof photo first</button>';
+    html += '</div></div>';
+  } else {
+    html += '<span class="badge ' + statCls + '" style="font-size:.85rem;padding:.4rem .8rem">' + t.status.replace('_', ' ') + '</span>';
+  }
+  html += '</div>';
+
+  $('detailCard').innerHTML = html;
+}
+
+function showList() {
+  $('detailView').classList.remove('show');
+  $('listView').style.display = '';
+  loadTickets();
+}
+
+var _resolveLabel = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="vertical-align:-2px"><polyline points="20 6 9 17 4 12"/></svg> Mark as Resolved';
+
+function previewResolvePhoto() {
+  var input = $('resolvePhoto');
+  var preview = $('resolvePreview');
+  var area = $('resolvePhotoArea');
+  var btn = $('resolveBtn');
+  if (input.files && input.files[0]) {
+    var file = input.files[0];
+    if (file.size > 5 * 1024 * 1024) {
+      App.toast('Photo too large (max 5MB)', 'error');
+      input.value = '';
+      return;
+    }
+    if (preview.src) URL.revokeObjectURL(preview.src);
+    preview.src = URL.createObjectURL(file);
+    preview.style.display = 'block';
+    area.classList.add('has-photo');
+    btn.disabled = false;
+    btn.innerHTML = _resolveLabel;
+  }
+}
+
+async function acceptTicket(id) {
+  var btns = $('ticketActions').querySelectorAll('button');
+  btns.forEach(function(b) { b.disabled = true; });
+  var res = await App.supFetch('/tickets/' + id + '/accept', { method: 'POST' });
+  if (!res) { btns.forEach(function(b) { b.disabled = false; }); return; }
+  if (!res.ok) {
+    var d = await res.json();
+    App.toast(d.error || 'Failed to accept', 'error');
+    btns.forEach(function(b) { b.disabled = false; });
+    return;
+  }
+  App.toast('Ticket accepted — get to work!', 'success');
+  showDetail(id);
+}
+
+async function resolveTicket(id) {
+  var photoInput = $('resolvePhoto');
+  if (!photoInput.files || !photoInput.files[0]) {
+    App.toast('Please take a proof photo first', 'error');
+    return;
+  }
+  var btn = $('resolveBtn');
+  btn.disabled = true;
+  btn.textContent = 'Resolving…';
+
+  var fd = new FormData();
+  fd.append('image', photoInput.files[0]);
+  var note = $('resolveNote').value.trim();
+  if (note) fd.append('note', note);
+
+  var res = await App.supFetch('/tickets/' + id + '/resolve', { method: 'POST', body: fd });
+  if (!res) { btn.disabled = false; btn.innerHTML = _resolveLabel; return; }
+  if (!res.ok) {
+    var d = await res.json();
+    App.toast(d.error || 'Failed to resolve', 'error');
+    btn.disabled = false;
+    btn.innerHTML = _resolveLabel;
+    return;
+  }
+  App.toast('Ticket resolved!', 'success');
+  showDetail(id);
+}
+
+function openLightbox(src) {
+  if (event) event.stopPropagation();
+  $('lightboxImg').src = src;
+  $('lightbox').classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox() {
+  $('lightbox').classList.remove('show');
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeLightbox(); });
+
+loadTickets();
+// Auto-refresh every 60s when list is visible (low-network friendly)
+setInterval(function() { if ($('listView').style.display !== 'none') loadTickets(); }, 60000);
+</script>
+</body>
+</html>

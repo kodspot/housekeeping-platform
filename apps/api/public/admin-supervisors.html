@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="manifest" href="/site.webmanifest">
+<title>Supervisors — Housekeeping Admin</title>
+<link rel="stylesheet" href="/css/design-system.css">
+<style>
+/* ── Summary ── */
+.sv-summary{display:flex;gap:1rem;flex-wrap:wrap;padding:.6rem 0 .5rem;border-bottom:1px solid var(--border-light);margin-bottom:.75rem}
+.sv-summary-item{font-size:.78rem;color:var(--text-muted)}
+.sv-summary-item b{color:var(--text);font-weight:700}
+
+/* ── Filters ── */
+.sv-filters{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:.75rem}
+.sv-filters .form-input,.sv-filters .form-select{font-size:.82rem;height:36px}
+.sv-filters .cs-trigger{font-size:.82rem;height:36px;min-height:36px}
+.sv-search{min-width:180px;max-width:260px;flex:1}
+.sv-sort{min-width:130px;max-width:160px}
+
+/* ── Table ── */
+.sv-tbl{width:100%;border-collapse:collapse;font-size:.84rem}
+.sv-tbl thead th{text-align:left;padding:.55rem .65rem;color:var(--text-muted);border-bottom:2px solid var(--border);font-weight:600;font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;position:sticky;top:0;background:var(--surface);z-index:1}
+.sv-tbl tbody td{padding:.55rem .65rem;border-bottom:1px solid var(--border-light);vertical-align:middle}
+.sv-tbl tbody tr:nth-child(even) td{background:rgba(248,250,252,.5)}
+.sv-tbl tbody tr:hover td{background:rgba(14,165,164,.04)}
+.sv-tbl td:last-child{white-space:nowrap}
+.sv-row-inactive td{opacity:.55}
+.sv-name-cell{font-weight:600}
+.sv-desig-sub{font-size:.7rem;color:var(--text-muted);font-weight:400;display:block;margin-top:1px}
+.sv-email{font-size:.8rem;color:var(--text-muted)}
+.sv-joined{font-size:.75rem;color:var(--text-muted)}
+.sv-records{font-weight:700;color:var(--primary)}
+.sv-tickets{font-weight:600;color:var(--secondary)}
+.sv-actions{display:flex;gap:4px;flex-wrap:wrap}
+
+/* ── Stats modal ── */
+.sv-stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:.5rem;margin:.5rem 0}
+.sv-stat-card{text-align:center;padding:.6rem .5rem;border-radius:var(--radius-lg);background:var(--bg);transition:box-shadow .15s}
+.sv-stat-card:hover{box-shadow:var(--shadow-sm)}
+.sv-stat-val{font-size:1.3rem;font-weight:700;color:var(--primary)}
+.sv-stat-label{font-size:.68rem;color:var(--text-muted);margin-top:2px}
+.sv-stat-section{margin-top:.75rem;padding-top:.6rem;border-top:1px solid var(--border-light)}
+.sv-stat-section-title{font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);margin-bottom:.4rem}
+.sv-stat-row{display:flex;justify-content:space-between;align-items:center;padding:.2rem 0;font-size:.82rem}
+.sv-stat-row-val{font-weight:600}
+.sv-stat-footer{font-size:.72rem;color:var(--text-muted);text-align:center;margin-top:.6rem}
+
+/* ── Detail modal ── */
+.sv-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem .75rem}
+.sv-detail-item{padding:.35rem 0}
+.sv-detail-label{font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:1px}
+.sv-detail-val{font-size:.88rem;font-weight:500;word-break:break-word}
+
+/* ── Pagination ── */
+.sv-pager{display:flex;gap:.35rem;justify-content:center;align-items:center;padding:.75rem 0}
+.sv-pager button{padding:.3rem .6rem;font-size:.78rem;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);cursor:pointer;min-height:32px;transition:all .15s}
+.sv-pager button:hover{border-color:var(--primary);color:var(--primary)}
+.sv-pager button.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.sv-pager button:disabled{opacity:.4;cursor:default}
+.sv-pager-info{font-size:.75rem;color:var(--text-muted);margin:0 .5rem}
+
+/* ── Tabs ── */
+.sv-form-tabs{display:flex;gap:0;border-bottom:2px solid var(--border-light);margin-bottom:.75rem}
+.sv-form-tab{padding:.45rem .9rem;font-size:.8rem;font-weight:500;color:var(--text-muted);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s}
+.sv-form-tab:hover{color:var(--text)}
+.sv-form-tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+.sv-form-section{display:none}
+.sv-form-section.active{display:block}
+
+/* ── Password toggle ── */
+.sv-pw-wrap{position:relative}
+.sv-pw-wrap input{padding-right:2.5rem}
+.sv-pw-toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:.75rem;padding:2px 4px}
+.sv-pw-toggle:hover{color:var(--text)}
+
+/* ── Responsive: phones ≤640px ── */
+@media(max-width:640px){
+  .sv-search{min-width:100%;max-width:100%}
+  .sv-sort{flex:1 1 45%}
+  .sv-tbl thead{display:none}
+  .sv-tbl tbody tr{display:block;padding:.75rem;margin-bottom:.5rem;border:1px solid var(--border-light);border-radius:var(--radius);background:var(--surface)}
+  .sv-tbl tbody tr:nth-child(even){background:var(--surface)}
+  .sv-tbl tbody td{display:flex;justify-content:space-between;align-items:center;padding:.25rem 0;border:none;font-size:.82rem}
+  .sv-tbl tbody td::before{content:attr(data-label);font-weight:600;font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em;flex-shrink:0;margin-right:.5rem}
+  .sv-tbl tbody td:first-child{padding-top:0}
+  .sv-tbl tbody td:last-child{padding-top:.35rem;justify-content:flex-start}
+  .sv-tbl tbody td:last-child::before{display:none}
+  .sv-actions{width:100%}
+  .sv-desig-sub{display:inline;margin-top:0;margin-left:.25rem}
+  .sv-detail-grid{grid-template-columns:1fr}
+  .sv-stats-grid{grid-template-columns:repeat(2,1fr)}
+}
+
+/* ── Tablets ≤768px ── */
+@media(max-width:768px){
+  .sv-stats-grid{grid-template-columns:repeat(3,1fr)}
+  .sv-detail-grid{grid-template-columns:1fr 1fr}
+}
+
+/* ── Split screen 769–960px ── */
+@media(min-width:769px) and (max-width:960px){
+  .sv-tbl{font-size:.78rem}
+  .sv-tbl thead th,.sv-tbl tbody td{padding:.4rem .45rem}
+  .sv-actions .btn-sm{font-size:.7rem;padding:.15rem .3rem}
+  .sv-search{max-width:180px}
+}
+
+/* ── Desktop 1280px+ ── */
+@media(min-width:1280px){
+  .sv-tbl{font-size:.86rem}
+}
+
+/* ── Small phones ≤380px ── */
+@media(max-width:380px){
+  .sv-summary{flex-direction:column;gap:.25rem}
+  .sv-pager button{padding:.2rem .4rem;font-size:.72rem;min-height:28px}
+  .sv-stat-val{font-size:1.1rem}
+}
+
+/* ── Reduced motion ── */
+@media(prefers-reduced-motion:reduce){
+  *{transition:none!important}
+}
+</style>
+</head>
+<body>
+<nav class="topbar">
+  <div class="topbar-left">
+    <button class="nav-toggle" id="nav-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg></button>
+    <span class="topbar-brand">Housekeeping</span>
+    <div class="topbar-nav" id="topbar-nav"></div>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-user" id="userName"></span>
+    <button class="btn btn-sm btn-ghost" onclick="App.logout()">Logout</button>
+  </div>
+</nav>
+<div class="sa-banner" id="sa-banner"></div>
+
+<main class="container">
+  <div class="toolbar">
+    <h2 class="toolbar-title">Supervisors</h2>
+    <div class="flex items-center gap-sm" style="flex-wrap:wrap">
+      <label class="form-check"><input type="checkbox" id="showInactive" onchange="loadSupervisors(1)"> Show inactive</label>
+      <button class="btn btn-primary" onclick="openAdd()">+ Add Supervisor</button>
+    </div>
+  </div>
+
+  <div id="summaryBar"></div>
+
+  <div class="sv-filters">
+    <input class="form-input sv-search" type="search" id="searchInput" placeholder="Search name, email, phone…" oninput="debounceSearch()">
+    <select class="form-select sv-sort" id="sortSelect" onchange="loadSupervisors(1)">
+      <option value="name">Name A–Z</option>
+      <option value="name-desc">Name Z–A</option>
+      <option value="newest">Newest First</option>
+      <option value="oldest">Oldest First</option>
+      <option value="records">Most Records</option>
+    </select>
+  </div>
+
+  <div class="section">
+    <div class="table-wrap">
+      <table class="sv-tbl" role="table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Name</th>
+            <th>Email</th>
+            <th class="hide-mobile">Phone</th>
+            <th class="hide-mobile">Joined</th>
+            <th>Records</th>
+            <th class="hide-mobile">Tickets</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="supBody"><tr><td colspan="9" class="loading-center">Loading…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="sv-pager" id="pager"></div>
+  </div>
+</main>
+
+<!-- Add / Edit Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal" style="max-width:560px">
+    <h2 class="modal-title" id="modalTitle">Add Supervisor</h2>
+    <div id="modalError" class="error-msg"></div>
+    <form id="supForm" autocomplete="off">
+      <input type="hidden" id="sId">
+      <div class="sv-form-tabs">
+        <button type="button" class="sv-form-tab active" onclick="svSwitchTab('basic',this)">Basic Info</button>
+        <button type="button" class="sv-form-tab" onclick="svSwitchTab('personal',this)">Personal</button>
+        <button type="button" class="sv-form-tab" onclick="svSwitchTab('notes',this)">Notes</button>
+      </div>
+      <!-- Tab: Basic Info -->
+      <div class="sv-form-section active" id="sv-tab-basic">
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Name *</label><input class="form-input" type="text" id="sName" required maxlength="100"></div>
+          <div class="form-group"><label class="form-label">Employee ID</label><input class="form-input" type="text" id="sEmpId" maxlength="50" placeholder="e.g. EMP-001"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Email *</label><input class="form-input" type="email" id="sEmail" required maxlength="200"></div>
+          <div class="form-group"><label class="form-label">Phone</label><input class="form-input" type="tel" id="sPhone" maxlength="20"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Department</label><input class="form-input" type="text" id="sDept" maxlength="100" placeholder="e.g. Housekeeping"></div>
+          <div class="form-group"><label class="form-label">Designation</label><input class="form-input" type="text" id="sDesig" maxlength="100" placeholder="e.g. Floor Supervisor"></div>
+        </div>
+        <div class="form-row" id="pwGroup">
+          <div class="form-group"><label class="form-label">Password *</label>
+            <div class="sv-pw-wrap">
+              <input class="form-input" type="password" id="sPassword" minlength="8" maxlength="100">
+              <button type="button" class="sv-pw-toggle" onclick="togglePw('sPassword',this)">Show</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Tab: Personal -->
+      <div class="sv-form-section" id="sv-tab-personal">
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Gender</label>
+            <select class="form-select" id="sGender"><option value="">—</option><option value="Male">Male</option><option value="Female">Female</option><option value="Other">Other</option></select>
+          </div>
+          <div class="form-group"><label class="form-label">Blood Group</label><input class="form-input" type="text" id="sBlood" maxlength="10" placeholder="e.g. O+"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Date of Birth</label><input class="form-input" type="date" id="sDob"></div>
+          <div class="form-group"><label class="form-label">Date of Joining</label><input class="form-input" type="date" id="sDoj"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Address</label><input class="form-input" type="text" id="sAddress" maxlength="500"></div>
+        <div class="form-group"><label class="form-label">ID Proof Number</label><input class="form-input" type="text" id="sAadhar" maxlength="20"></div>
+      </div>
+      <!-- Tab: Notes -->
+      <div class="sv-form-section" id="sv-tab-notes">
+        <div class="form-group"><label class="form-label">Notes</label><textarea class="form-input" id="sNotes" maxlength="1000" rows="4" placeholder="Any additional notes…"></textarea></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="App.closeModal('modal')">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="saveBtn">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Password Reset Modal -->
+<div class="modal-overlay" id="pwModal">
+  <div class="modal" style="max-width:380px">
+    <h2 class="modal-title">Reset Password</h2>
+    <div id="pwError" class="error-msg"></div>
+    <form id="pwForm">
+      <input type="hidden" id="pwId">
+      <div class="form-group"><label class="form-label">New Password *</label>
+        <div class="sv-pw-wrap">
+          <input class="form-input" type="password" id="pwNew" required minlength="8" maxlength="100">
+          <button type="button" class="sv-pw-toggle" onclick="togglePw('pwNew',this)">Show</button>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="App.closeModal('pwModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="resetBtn">Reset</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- View Detail Modal -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal" style="max-width:480px">
+    <h2 class="modal-title" id="detailTitle">Supervisor Details</h2>
+    <div id="detailContent"><div class="loading-center">Loading…</div></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-outline" onclick="App.closeModal('detailModal')">Close</button>
+      <button type="button" class="btn btn-primary" id="detailEditBtn" onclick="">Edit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Stats Modal -->
+<div class="modal-overlay" id="statsModal">
+  <div class="modal" style="max-width:500px">
+    <h2 class="modal-title" id="statsTitle">Supervisor Analytics</h2>
+    <div id="statsContent"><div class="loading-center">Loading…</div></div>
+    <div class="modal-actions" style="justify-content:center;margin-top:.5rem">
+      <button type="button" class="btn btn-outline" onclick="App.closeModal('statsModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/app.js"></script>
+<script src="/js/custom-select.js"></script>
+<script>
+if (!App.initAdmin('supervisors')) throw '';
+App.initNotifications(App.apiFetch);
+var esc = App.esc, $ = App.$;
+var currentPage = 1, totalPages = 1;
+var searchTimer = null;
+
+function debounceSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(function() { loadSupervisors(1); }, 300);
+}
+
+function togglePw(inputId, btn) {
+  var inp = $(inputId);
+  if (inp.type === 'password') { inp.type = 'text'; btn.textContent = 'Hide'; }
+  else { inp.type = 'password'; btn.textContent = 'Show'; }
+}
+
+function svSwitchTab(tabId, btn) {
+  document.querySelectorAll('.sv-form-tab').forEach(function(t){ t.classList.remove('active'); });
+  document.querySelectorAll('.sv-form-section').forEach(function(s){ s.classList.remove('active'); });
+  btn.classList.add('active');
+  $('sv-tab-' + tabId).classList.add('active');
+}
+
+async function loadSupervisors(page) {
+  currentPage = page || 1;
+  var showInactive = $('showInactive').checked;
+  var search = $('searchInput').value.trim();
+  var sort = $('sortSelect').value;
+
+  var params = ['page=' + currentPage, 'limit=25', 'sort=' + sort];
+  if (!showInactive) params.push('active=true');
+  if (search) params.push('search=' + encodeURIComponent(search));
+
+  var res = await App.apiFetch('/supervisors?' + params.join('&'));
+  if (!res) return;
+  var data = await res.json();
+  var sups = data.supervisors || [];
+  totalPages = data.totalPages || 1;
+  var total = data.total || 0;
+
+  // Summary
+  var active = sups.filter(function(s){return s.isActive !== false}).length;
+  var inactive = sups.filter(function(s){return s.isActive === false}).length;
+  var totalRecords = sups.reduce(function(sum,s){return sum + (s._count ? s._count.cleaningRecords : 0)}, 0);
+  var totalTickets = sups.reduce(function(sum,s){return sum + (s._count ? s._count.ticketsAssigned : 0)}, 0);
+
+  $('summaryBar').innerHTML = '<div class="sv-summary">' +
+    '<span class="sv-summary-item"><b>' + total + '</b> total supervisors</span>' +
+    '<span class="sv-summary-item"><b>' + active + '</b> active' + (showInactive && inactive > 0 ? ' · <b>' + inactive + '</b> inactive' : '') + '</span>' +
+    '<span class="sv-summary-item"><b>' + totalRecords + '</b> records on page</span>' +
+    '<span class="sv-summary-item"><b>' + totalTickets + '</b> tickets on page</span>' +
+  '</div>';
+
+  if (!sups.length) {
+    $('supBody').innerHTML = '<tr><td colspan="9" class="empty">' + (search ? 'No supervisors match "' + esc(search) + '"' : 'No supervisors found') + '</td></tr>';
+    $('pager').innerHTML = '';
+    return;
+  }
+
+  var startIdx = (currentPage - 1) * 25;
+  $('supBody').innerHTML = sups.map(function(s, i) {
+    var num = startIdx + i + 1;
+    var records = s._count ? s._count.cleaningRecords : 0;
+    var tickets = s._count ? s._count.ticketsAssigned : 0;
+    var statusBadge = s.isActive !== false
+      ? '<span class="badge badge-success">Active</span>'
+      : '<span class="badge badge-danger">Inactive</span>';
+
+    var joinDate = s.createdAt ? new Date(s.createdAt).toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'}) : '—';
+
+    var actions = '<div class="sv-actions">' +
+      '<button class="btn btn-sm btn-outline" onclick="viewSupervisor(\'' + s.id + '\')" title="View details">View</button>' +
+      '<button class="btn btn-sm btn-outline" onclick="openEdit(\'' + s.id + '\')" title="Edit">Edit</button>' +
+      '<button class="btn btn-sm btn-outline" onclick="openPwReset(\'' + s.id + '\')" title="Reset password">PW</button>' +
+      '<button class="btn btn-sm btn-outline" onclick="showStats(\'' + s.id + '\',\'' + esc(s.name) + '\')" title="Analytics">Stats</button>';
+
+    if (s.isActive !== false) {
+      actions += '<button class="btn btn-sm btn-danger" onclick="deactivateSup(\'' + s.id + '\',\'' + esc(s.name) + '\')" title="Deactivate">Deactivate</button>';
+    } else {
+      actions += '<button class="btn btn-sm btn-success" onclick="reactivateSup(\'' + s.id + '\')" title="Reactivate">Activate</button>' +
+        '<button class="btn btn-sm btn-danger" onclick="permanentDeleteSup(\'' + s.id + '\',\'' + esc(s.name) + '\')" title="Delete permanently">Delete</button>';
+    }
+    actions += '</div>';
+
+    var rowClass = s.isActive === false ? ' class="sv-row-inactive"' : '';
+
+    return '<tr' + rowClass + '>' +
+      '<td data-label="#">' + num + '</td>' +
+      '<td data-label="Name"><span class="sv-name-cell">' + esc(s.name) + '</span>' +
+        (s.designation ? '<span class="sv-desig-sub">' + esc(s.designation) + '</span>' : '') + '</td>' +
+      '<td data-label="Email"><span class="sv-email">' + esc(s.email) + '</span></td>' +
+      '<td data-label="Phone" class="hide-mobile">' + esc(s.phone || '—') + '</td>' +
+      '<td data-label="Joined" class="hide-mobile"><span class="sv-joined">' + joinDate + '</span></td>' +
+      '<td data-label="Records"><span class="sv-records">' + records + '</span></td>' +
+      '<td data-label="Tickets" class="hide-mobile"><span class="sv-tickets">' + tickets + '</span></td>' +
+      '<td data-label="Status">' + statusBadge + '</td>' +
+      '<td data-label="Actions">' + actions + '</td>' +
+    '</tr>';
+  }).join('');
+
+  renderPager();
+}
+
+function renderPager() {
+  if (totalPages <= 1) { $('pager').innerHTML = ''; return; }
+  var html = '<button ' + (currentPage <= 1 ? 'disabled' : 'onclick="loadSupervisors(' + (currentPage-1) + ')"') + '>&laquo; Prev</button>';
+  var start = Math.max(1, currentPage - 2);
+  var end = Math.min(totalPages, currentPage + 2);
+  if (start > 1) html += '<button onclick="loadSupervisors(1)">1</button>' + (start > 2 ? '<span class="sv-pager-info">…</span>' : '');
+  for (var i = start; i <= end; i++) {
+    html += '<button class="' + (i === currentPage ? 'active' : '') + '" onclick="loadSupervisors(' + i + ')">' + i + '</button>';
+  }
+  if (end < totalPages) html += (end < totalPages - 1 ? '<span class="sv-pager-info">…</span>' : '') + '<button onclick="loadSupervisors(' + totalPages + ')">' + totalPages + '</button>';
+  html += '<button ' + (currentPage >= totalPages ? 'disabled' : 'onclick="loadSupervisors(' + (currentPage+1) + ')"') + '>Next &raquo;</button>';
+  $('pager').innerHTML = html;
+}
+
+/* ── Add / Edit ── */
+function openAdd() {
+  $('modalTitle').textContent = 'Add Supervisor';
+  $('supForm').reset(); $('sId').value = '';
+  $('sEmail').disabled = false;
+  $('pwGroup').style.display = '';
+  $('sPassword').required = true;
+  $('sPassword').type = 'password';
+  var toggleBtn = $('pwGroup').querySelector('.sv-pw-toggle');
+  if (toggleBtn) toggleBtn.textContent = 'Show';
+  svSwitchTab('basic', document.querySelector('.sv-form-tab'));
+  App.hideError('modalError');
+  App.openModal('modal');
+}
+
+async function openEdit(id) {
+  var res = await App.apiFetch('/supervisors/' + id);
+  if (!res || !res.ok) { App.toast('Failed to load supervisor', 'error'); return; }
+  var s = await res.json();
+  $('modalTitle').textContent = 'Edit Supervisor';
+  $('sId').value = s.id;
+  $('sName').value = s.name || '';
+  $('sEmpId').value = s.employeeId || '';
+  $('sEmail').value = s.email || '';
+  $('sPhone').value = s.phone || '';
+  $('sDept').value = s.department || '';
+  $('sDesig').value = s.designation || '';
+  $('sGender').value = s.gender || '';
+  $('sBlood').value = s.bloodGroup || '';
+  $('sDob').value = s.dateOfBirth ? s.dateOfBirth.substring(0,10) : '';
+  $('sDoj').value = s.dateOfJoin ? s.dateOfJoin.substring(0,10) : '';
+  $('sAddress').value = s.address || '';
+  $('sAadhar').value = s.aadharNo || '';
+  $('sNotes').value = s.notes || '';
+  $('sEmail').disabled = true;
+  $('pwGroup').style.display = 'none';
+  $('sPassword').required = false;
+  svSwitchTab('basic', document.querySelector('.sv-form-tab'));
+  App.hideError('modalError');
+  App.openModal('modal');
+}
+
+$('supForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  var id = $('sId').value;
+  var body = { name: $('sName').value.trim() };
+  if (!id) {
+    body.email = $('sEmail').value.trim();
+    body.password = $('sPassword').value;
+  }
+  body.phone = $('sPhone').value.trim() || '';
+  body.designation = $('sDesig').value.trim() || '';
+  body.employeeId = $('sEmpId').value.trim() || '';
+  body.department = $('sDept').value.trim() || '';
+  body.gender = $('sGender').value || '';
+  body.bloodGroup = $('sBlood').value.trim() || '';
+  body.dateOfBirth = $('sDob').value || '';
+  body.dateOfJoin = $('sDoj').value || '';
+  body.address = $('sAddress').value.trim() || '';
+  body.aadharNo = $('sAadhar').value.trim() || '';
+  body.notes = $('sNotes').value.trim() || '';
+
+  var saveBtn = $('saveBtn');
+  saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
+
+  try {
+    var res = await App.apiFetch(id ? '/supervisors/' + id : '/supervisors', {
+      method: id ? 'PATCH' : 'POST',
+      body: JSON.stringify(body)
+    });
+    if (!res) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; return; }
+    if (!res.ok) {
+      var d = await res.json();
+      App.showError('modalError', d.error || 'Failed');
+      saveBtn.disabled = false; saveBtn.textContent = 'Save';
+      return;
+    }
+    App.closeModal('modal');
+    App.toast(id ? 'Supervisor updated' : 'Supervisor created', 'success');
+    loadSupervisors(currentPage);
+  } catch (err) {
+    App.showError('modalError', 'Network error');
+  }
+  saveBtn.disabled = false; saveBtn.textContent = 'Save';
+});
+
+/* ── Password reset ── */
+function openPwReset(id) {
+  $('pwId').value = id; $('pwForm').reset();
+  $('pwNew').type = 'password';
+  var toggleBtn = $('pwModal').querySelector('.sv-pw-toggle');
+  if (toggleBtn) toggleBtn.textContent = 'Show';
+  App.hideError('pwError');
+  App.openModal('pwModal');
+}
+
+$('pwForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  var resetBtn = $('resetBtn');
+  resetBtn.disabled = true; resetBtn.textContent = 'Resetting…';
+
+  try {
+    var res = await App.apiFetch('/supervisors/' + $('pwId').value + '/password', {
+      method: 'PATCH',
+      body: JSON.stringify({ password: $('pwNew').value })
+    });
+    if (!res) { resetBtn.disabled = false; resetBtn.textContent = 'Reset'; return; }
+    if (!res.ok) {
+      var d = await res.json();
+      App.showError('pwError', d.error || 'Failed');
+      resetBtn.disabled = false; resetBtn.textContent = 'Reset';
+      return;
+    }
+    App.closeModal('pwModal');
+    App.toast('Password reset successfully', 'success');
+  } catch (err) {
+    App.showError('pwError', 'Network error');
+  }
+  resetBtn.disabled = false; resetBtn.textContent = 'Reset';
+});
+
+/* ── View Detail ── */
+async function viewSupervisor(id) {
+  $('detailContent').innerHTML = '<div class="loading-center">Loading…</div>';
+  App.openModal('detailModal');
+  var res = await App.apiFetch('/supervisors/' + id);
+  if (!res || !res.ok) { $('detailContent').innerHTML = '<div class="error-msg show" style="display:block">Failed to load supervisor</div>'; return; }
+  var s = await res.json();
+  $('detailTitle').textContent = s.name;
+  $('detailEditBtn').setAttribute('onclick', 'App.closeModal("detailModal");openEdit("' + s.id + '")');
+
+  function row(label, val) {
+    return '<div class="sv-detail-item"><div class="sv-detail-label">' + label + '</div><div class="sv-detail-val">' + (val || '—') + '</div></div>';
+  }
+  var joinDate = s.createdAt ? new Date(s.createdAt).toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'}) : null;
+  var statusBadge = s.isActive !== false
+    ? '<span class="badge badge-success">Active</span>'
+    : '<span class="badge badge-danger">Inactive</span>';
+  var records = s._count ? s._count.cleaningRecords : 0;
+  var tickets = s._count ? s._count.ticketsAssigned : 0;
+  var dob = s.dateOfBirth ? new Date(s.dateOfBirth).toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'}) : null;
+  var doj = s.dateOfJoin ? new Date(s.dateOfJoin).toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'}) : null;
+
+  $('detailContent').innerHTML = '<div class="sv-detail-grid">' +
+    row('Email', esc(s.email)) +
+    row('Status', statusBadge) +
+    row('Phone', esc(s.phone)) +
+    row('Employee ID', esc(s.employeeId)) +
+    row('Department', esc(s.department)) +
+    row('Designation', esc(s.designation)) +
+    row('Gender', esc(s.gender)) +
+    row('Blood Group', esc(s.bloodGroup)) +
+    row('Date of Birth', dob) +
+    row('Date of Joining', doj) +
+    row('Address', esc(s.address)) +
+    row('ID Proof', esc(s.aadharNo)) +
+    row('Joined', joinDate) +
+    row('Cleaning Records', '<span class="sv-records">' + records + '</span>') +
+    row('Tickets Assigned', '<span class="sv-tickets">' + tickets + '</span>') +
+    (s.notes ? '<div class="sv-detail-item" style="grid-column:1/-1"><div class="sv-detail-label">Notes</div><div class="sv-detail-val">' + esc(s.notes) + '</div></div>' : '') +
+  '</div>';
+}
+
+/* ── Status management ── */
+async function deactivateSup(id, name) {
+  if (!await App.confirmDialog('Deactivate "' + name + '"? They will no longer be able to log in.')) return;
+  var res = await App.apiFetch('/supervisors/' + id, { method: 'PATCH', body: JSON.stringify({ isActive: false }) });
+  if (!res) return;
+  if (!res.ok) { App.toast('Failed to deactivate', 'error'); return; }
+  App.toast('Supervisor deactivated', 'success'); loadSupervisors(currentPage);
+}
+
+async function reactivateSup(id) {
+  var res = await App.apiFetch('/supervisors/' + id, { method: 'PATCH', body: JSON.stringify({ isActive: true }) });
+  if (!res) return;
+  if (!res.ok) { App.toast('Failed to activate', 'error'); return; }
+  App.toast('Supervisor activated', 'success'); loadSupervisors(currentPage);
+}
+
+async function permanentDeleteSup(id, name) {
+  if (!await App.confirmDialog('Permanently delete "' + name + '"? This cannot be undone.')) return;
+  var res = await App.apiFetch('/supervisors/' + id + '/permanent', { method: 'DELETE' });
+  if (!res) return;
+  if (!res.ok) {
+    var d = await res.json();
+    App.toast(d.error || 'Failed to delete', 'error');
+    return;
+  }
+  App.toast('Supervisor permanently deleted', 'success'); loadSupervisors(currentPage);
+}
+
+/* ── Stats ── */
+async function showStats(id, name) {
+  $('statsTitle').textContent = name + ' — Analytics';
+  $('statsContent').innerHTML = '<div class="loading-center">Loading…</div>';
+  App.openModal('statsModal');
+  var res = await App.apiFetch('/supervisors/' + id + '/stats');
+  if (!res || !res.ok) { $('statsContent').innerHTML = '<div class="error-msg show" style="display:block">Failed to load stats</div>'; return; }
+  var s = await res.json();
+  var lastAct = s.lastActivity ? App.fmtDate(s.lastActivity) : 'No activity yet';
+
+  // Cleaning records grid
+  var html = '<div class="sv-stats-grid">' +
+    '<div class="sv-stat-card"><div class="sv-stat-val">' + s.daily + '</div><div class="sv-stat-label">Today</div></div>' +
+    '<div class="sv-stat-card"><div class="sv-stat-val">' + s.weekly + '</div><div class="sv-stat-label">This Week</div></div>' +
+    '<div class="sv-stat-card"><div class="sv-stat-val">' + s.monthly + '</div><div class="sv-stat-label">This Month</div></div>' +
+    '<div class="sv-stat-card"><div class="sv-stat-val">' + s.yearly + '</div><div class="sv-stat-label">This Year</div></div>' +
+    '<div class="sv-stat-card"><div class="sv-stat-val">' + s.total + '</div><div class="sv-stat-label">All Time</div></div>' +
+  '</div>';
+
+  // Flagged & Late
+  if (s.flagged > 0 || s.lateCount > 0) {
+    html += '<div class="sv-stats-grid" style="margin-top:.35rem">';
+    if (s.flagged > 0) html += '<div class="sv-stat-card"><div class="sv-stat-val" style="color:var(--danger)">' + s.flagged + '</div><div class="sv-stat-label">Flagged</div></div>';
+    if (s.lateCount > 0) html += '<div class="sv-stat-card"><div class="sv-stat-val" style="color:var(--warning)">' + s.lateCount + '</div><div class="sv-stat-label">Late</div></div>';
+    html += '</div>';
+  }
+
+  // Tickets section
+  if (s.tickets) {
+    html += '<div class="sv-stat-section">' +
+      '<div class="sv-stat-section-title">Tickets</div>' +
+      '<div class="sv-stat-row"><span>Assigned</span><span class="sv-stat-row-val">' + s.tickets.assigned + '</span></div>' +
+      '<div class="sv-stat-row"><span>Resolved</span><span class="sv-stat-row-val" style="color:var(--success)">' + s.tickets.resolved + '</span></div>' +
+      '<div class="sv-stat-row"><span>Open</span><span class="sv-stat-row-val" style="color:var(--warning)">' + s.tickets.open + '</span></div>' +
+    '</div>';
+  }
+
+  // Shift breakdown
+  if (s.shifts && Object.keys(s.shifts).length > 0) {
+    html += '<div class="sv-stat-section">' +
+      '<div class="sv-stat-section-title">Shift Breakdown</div>';
+    var shiftOrder = ['MORNING','AFTERNOON','NIGHT','GENERAL'];
+    shiftOrder.forEach(function(sh) {
+      if (s.shifts[sh]) {
+        html += '<div class="sv-stat-row"><span>' + sh.charAt(0) + sh.slice(1).toLowerCase() + '</span><span class="sv-stat-row-val">' + s.shifts[sh] + '</span></div>';
+      }
+    });
+    html += '</div>';
+  }
+
+  // Top locations
+  if (s.topLocations && s.topLocations.length > 0) {
+    html += '<div class="sv-stat-section">' +
+      '<div class="sv-stat-section-title">Top Locations</div>';
+    s.topLocations.forEach(function(loc) {
+      html += '<div class="sv-stat-row"><span>' + esc(loc.name) + '</span><span class="sv-stat-row-val">' + loc.count + '</span></div>';
+    });
+    html += '</div>';
+  }
+
+  html += '<div class="sv-stat-footer">Last activity: ' + lastAct + '</div>';
+  $('statsContent').innerHTML = html;
+}
+
+loadSupervisors(1);
+</script>
+</body>
+</html>

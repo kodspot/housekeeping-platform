@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="manifest" href="/site.webmanifest">
+<title>Super Admin — Housekeeping</title>
+<link rel="stylesheet" href="/css/design-system.css">
+<style>
+:root { --sa: #4338CA; --sa-hover: #3730A3; --sa-light: #EEF2FF; --sa-border: #C7D2FE; }
+.topbar-sa { background: var(--sa); }
+.btn-sa { background: var(--sa); color: #fff; border-color: var(--sa); }
+.btn-sa:hover:not(:disabled) { background: var(--sa-hover); }
+
+/* Enhanced stat cards */
+.sa-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .75rem; margin-bottom: 1.25rem; }
+.sa-stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.15rem; position: relative; overflow: hidden; transition: box-shadow .15s; }
+.sa-stat:hover { box-shadow: var(--shadow); }
+.sa-stat::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--sa); border-radius: var(--radius-lg) 0 0 var(--radius-lg); }
+.sa-stat-icon { font-size: 1.4rem; margin-bottom: .25rem; }
+.sa-stat-value { font-size: 1.5rem; font-weight: 700; color: var(--text); line-height: 1.1; }
+.sa-stat-label { font-size: .75rem; color: var(--text-muted); margin-top: .15rem; }
+.sa-stat-sub { font-size: .68rem; color: var(--text-light); margin-top: .3rem; }
+.sa-stat.warn::before { background: var(--status-progress); }
+.sa-stat.success::before { background: var(--status-clean); }
+
+/* Tabs */
+.sa-tabs { display: flex; gap: 0; border-bottom: 2px solid var(--border); margin-bottom: 1rem; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.sa-tabs::-webkit-scrollbar { display: none; }
+.sa-tab { padding: .6rem 1rem; font-size: .82rem; font-weight: 500; color: var(--text-muted); cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent; margin-bottom: -2px; white-space: nowrap; transition: all .15s; min-height: var(--touch-min); }
+.sa-tab:hover { color: var(--sa); }
+.sa-tab.active { color: var(--sa); border-bottom-color: var(--sa); font-weight: 600; }
+
+/* Toolbar */
+.sa-toolbar { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; margin-bottom: .75rem; }
+.sa-toolbar .form-input, .sa-toolbar .form-select { max-width: 220px; font-size: .82rem; height: 34px; }
+.sa-toolbar .cs-wrap { max-width: 220px; }
+.sa-toolbar .cs-trigger { font-size: .82rem; height: 34px; min-height: 34px; padding: .35rem .5rem; padding-right: 1.8rem; }
+.sa-toolbar .btn { font-size: .8rem; height: 34px; }
+.sa-toolbar-spacer { flex: 1; }
+
+/* Better table styles */
+.sa-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+.sa-table thead th { background: var(--sa-light); color: var(--sa); font-weight: 600; padding: .6rem .75rem; text-align: left; border-bottom: 2px solid var(--sa-border); white-space: nowrap; font-size: .75rem; text-transform: uppercase; letter-spacing: .3px; position: sticky; top: 0; z-index: 2; }
+.sa-table tbody td { padding: .55rem .75rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.sa-table tbody tr:hover { background: var(--sa-light); }
+.sa-table .name-cell b { font-weight: 600; }
+.sa-table .actions-cell { white-space: nowrap; }
+.sa-table .actions-cell .btn { font-size: .72rem; padding: .2rem .5rem; margin-right: .25rem; }
+
+/* Status badges */
+.status-badge { display: inline-block; padding: .15rem .5rem; border-radius: 10px; font-size: .72rem; font-weight: 600; }
+.status-active { background: #DCFCE7; color: #15803D; }
+.status-suspended { background: #FEF3C7; color: #92400E; }
+.status-deleted { background: #FEE2E2; color: #B91C1C; }
+.status-inactive { background: #F3F4F6; color: #6B7280; }
+
+/* Analytics */
+.analytics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-top: 1rem; }
+.org-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem; transition: box-shadow .15s; }
+.org-card:hover { box-shadow: var(--shadow); }
+.org-card h4 { font-size: .9rem; margin-bottom: .5rem; color: var(--text); }
+.org-card-stats { display: flex; flex-wrap: wrap; gap: .4rem; }
+.org-card-stats span { background: var(--sa-light); color: var(--sa); padding: .2rem .5rem; border-radius: var(--radius-sm); font-size: .72rem; font-weight: 500; }
+
+/* Audit log */
+.audit-item { display: flex; gap: .75rem; padding: .65rem 0; border-bottom: 1px solid var(--border); font-size: .82rem; align-items: flex-start; }
+.audit-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--sa); margin-top: .35rem; flex-shrink: 0; }
+.audit-dot.admin { background: #2563EB; }
+.audit-dot.supervisor { background: #059669; }
+.audit-dot.worker { background: #D97706; }
+.audit-body { flex: 1; min-width: 0; }
+.audit-action { font-weight: 600; color: var(--text); }
+.audit-meta { font-size: .72rem; color: var(--text-muted); margin-top: .15rem; }
+.audit-details { font-size: .72rem; color: var(--text-light); margin-top: .2rem; background: var(--bg); padding: .3rem .5rem; border-radius: var(--radius-sm); word-break: break-all; }
+.audit-pagination { display: flex; align-items: center; gap: .5rem; margin-top: .75rem; justify-content: center; }
+.audit-pagination .btn { font-size: .75rem; }
+
+/* Metrics panel */
+.metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .75rem; margin-top: .75rem; }
+.metric-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: .75rem; text-align: center; transition: box-shadow .15s; }
+.metric-card:hover { box-shadow: var(--shadow-sm); }
+.metric-card .metric-icon { font-size: 1.5rem; margin-bottom: .25rem; }
+.metric-card .metric-val { font-size: 1.3rem; font-weight: 700; color: var(--text); }
+.metric-card .metric-label { font-size: .7rem; color: var(--text-muted); margin-top: .1rem; }
+
+/* Empty state */
+.empty-state { text-align: center; padding: 2rem; color: var(--text-muted); font-size: .85rem; }
+.empty-state-icon { font-size: 2.5rem; margin-bottom: .5rem; opacity: .5; }
+
+@media (max-width: 1024px) {
+  .sa-stats { grid-template-columns: repeat(3, 1fr); }
+  .analytics-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+  .sa-stats { grid-template-columns: repeat(2, 1fr); }
+  .sa-toolbar { flex-direction: column; align-items: stretch; }
+  .sa-toolbar .form-input, .sa-toolbar .form-select { max-width: 100%; }
+  .sa-toolbar .cs-wrap { max-width: 100%; }
+  .sa-toolbar .cs-trigger { max-width: 100%; }
+  .hide-mobile { display: none !important; }
+  .sa-tab { padding: .5rem .65rem; font-size: .75rem; }
+  .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+  .sa-stats { grid-template-columns: 1fr 1fr; gap: .5rem; }
+  .sa-stat { padding: .75rem; }
+  .sa-stat-value { font-size: 1.2rem; }
+  .sa-tab { padding: .45rem .5rem; font-size: .7rem; }
+  .sa-table tbody td { padding: .4rem .5rem; font-size: .75rem; }
+  .metrics-grid { grid-template-columns: 1fr 1fr; gap: .5rem; }
+  .metric-card .metric-val { font-size: 1.1rem; }
+  .audit-item { gap: .5rem; font-size: .78rem; }
+}
+</style>
+</head>
+<body>
+<nav class="topbar topbar-sa">
+  <div class="topbar-left"><span class="topbar-brand">Housekeeping — Super Admin</span></div>
+  <div class="topbar-right">
+    <span class="topbar-user" id="userName"></span>
+    <button class="btn btn-sm btn-ghost" onclick="App.logoutSA()">Logout</button>
+  </div>
+</nav>
+
+<main class="container" style="max-width:1100px">
+  <!-- Stats -->
+  <div class="sa-stats" id="statsGrid">
+    <div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>
+    <div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>
+    <div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="sa-tabs" id="tabBar">
+    <button class="sa-tab active" data-tab="orgs">Organizations</button>
+    <button class="sa-tab" data-tab="admins">Admins</button>
+    <button class="sa-tab" data-tab="supervisors">Supervisors</button>
+    <button class="sa-tab" data-tab="workers">Workers</button>
+    <button class="sa-tab" data-tab="analytics">Analytics</button>
+    <button class="sa-tab" data-tab="audit">Audit Logs</button>
+  </div>
+
+  <!-- Orgs Tab -->
+  <div class="tab-panel active" id="tab-orgs">
+    <div class="sa-toolbar">
+      <input type="text" class="form-input" placeholder="Search organizations…" id="orgSearch" oninput="debouncedOrgSearch()">
+      <div class="sa-toolbar-spacer"></div>
+      <button class="btn btn-sa" onclick="openOrgModal()">+ New Organization</button>
+    </div>
+    <div class="table-wrap">
+      <table class="sa-table"><thead><tr>
+        <th>Name</th><th>Type</th><th class="hide-mobile">Phone</th><th>Status</th>
+        <th class="hide-mobile">Users</th><th class="hide-mobile">Workers</th><th>Actions</th>
+      </tr></thead><tbody id="orgBody"><tr><td colspan="7" class="loading-center">Loading…</td></tr></tbody></table>
+    </div>
+  </div>
+
+  <!-- Admins Tab -->
+  <div class="tab-panel" id="tab-admins">
+    <div class="sa-toolbar">
+      <select class="form-select" id="adminOrgFilter" onchange="loadUsers('ADMIN')"><option value="">All Organizations</option></select>
+      <div class="sa-toolbar-spacer"></div>
+      <button class="btn btn-sa" onclick="openAdminModal()">+ New Admin</button>
+    </div>
+    <div class="table-wrap">
+      <table class="sa-table"><thead><tr>
+        <th>Name</th><th>Email</th><th class="hide-mobile">Phone</th><th class="hide-mobile">Organization</th><th>Status</th><th>Actions</th>
+      </tr></thead><tbody id="adminBody"><tr><td colspan="6" class="loading-center">Loading…</td></tr></tbody></table>
+    </div>
+  </div>
+
+  <!-- Supervisors Tab -->
+  <div class="tab-panel" id="tab-supervisors">
+    <div class="sa-toolbar">
+      <select class="form-select" id="supOrgFilter" onchange="loadUsers('SUPERVISOR')"><option value="">All Organizations</option></select>
+      <div class="sa-toolbar-spacer"></div>
+      <button class="btn btn-sa" onclick="openSupModal()">+ New Supervisor</button>
+    </div>
+    <div class="table-wrap">
+      <table class="sa-table"><thead><tr>
+        <th>Name</th><th>Email</th><th class="hide-mobile">Phone</th><th class="hide-mobile">Organization</th><th>Status</th><th>Actions</th>
+      </tr></thead><tbody id="supBody"><tr><td colspan="6" class="loading-center">Loading…</td></tr></tbody></table>
+    </div>
+  </div>
+
+  <!-- Workers Tab -->
+  <div class="tab-panel" id="tab-workers">
+    <div class="sa-toolbar">
+      <select class="form-select" id="workerOrgFilter" onchange="loadWorkers()"><option value="">Select Organization</option></select>
+      <div class="sa-toolbar-spacer"></div>
+      <button class="btn btn-sa" onclick="openWorkerModal()">+ New Worker</button>
+    </div>
+    <div class="table-wrap">
+      <table class="sa-table"><thead><tr>
+        <th>Name</th><th>Emp ID</th><th class="hide-mobile">Phone</th><th class="hide-mobile">Dept</th><th>Records</th><th>Actions</th>
+      </tr></thead><tbody id="workerBody"><tr><td colspan="6" class="empty-state">Select an organization above</td></tr></tbody></table>
+    </div>
+  </div>
+
+  <!-- Analytics Tab -->
+  <div class="tab-panel" id="tab-analytics">
+    <div class="section">
+      <h3 class="section-title">System Metrics</h3>
+      <div class="metrics-grid" id="metricsGrid">
+        <div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>
+        <div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>
+      </div>
+    </div>
+    <div class="section">
+      <h3 class="section-title">7-Day Cleaning Trend</h3>
+      <div class="trend-chart" id="trendChart"></div>
+    </div>
+    <div class="section">
+      <h3 class="section-title">Per-Organization Breakdown</h3>
+      <div class="analytics-grid" id="orgBreakdown"></div>
+    </div>
+  </div>
+
+  <!-- Audit Logs Tab -->
+  <div class="tab-panel" id="tab-audit">
+    <div class="sa-toolbar">
+      <select class="form-select" id="auditOrgFilter" onchange="loadAuditLogs(true)"><option value="">All Organizations</option></select>
+      <select class="form-select" id="auditActionFilter" onchange="loadAuditLogs(true)">
+        <option value="">All Actions</option>
+        <option value="organization">Organization</option>
+        <option value="admin">Admin</option>
+        <option value="supervisor">Supervisor</option>
+        <option value="worker">Worker</option>
+        <option value="password">Password</option>
+        <option value="ticket">Ticket</option>
+        <option value="cleaning">Cleaning</option>
+      </select>
+      <div class="sa-toolbar-spacer"></div>
+      <span style="font-size:.75rem;color:var(--text-muted)" id="auditCount"></span>
+    </div>
+    <div id="auditList"></div>
+    <div class="audit-pagination" id="auditPagination"></div>
+  </div>
+</main>
+
+<!-- Org Modal -->
+<div class="modal-overlay" id="orgModal">
+  <div class="modal">
+    <h2 class="modal-title" id="orgModalTitle">New Organization</h2>
+    <div id="orgError" class="error-msg"></div>
+    <form id="orgForm">
+      <input type="hidden" id="orgId">
+      <div class="form-group"><label class="form-label">Name *</label><input class="form-input" type="text" id="orgName" required maxlength="200"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Type</label>
+          <select class="form-select" id="orgType"><option value="HOTEL">Hotel</option><option value="HOSPITAL">Hospital</option><option value="OTHER">Other</option></select>
+        </div>
+        <div class="form-group"><label class="form-label">Phone</label><input class="form-input" type="tel" id="orgPhone" maxlength="20"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Email</label><input class="form-input" type="email" id="orgEmail" maxlength="200"></div>
+      <div class="form-group"><label class="form-label">Address</label><textarea class="form-textarea" id="orgAddress" rows="2" maxlength="500"></textarea></div>
+      <div class="form-group" id="orgStatusGroup" style="display:none"><label class="form-label">Status</label>
+        <select class="form-select" id="orgStatus"><option value="ACTIVE">Active</option><option value="SUSPENDED">Suspended</option></select>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="App.closeModal('orgModal')">Cancel</button>
+        <button type="submit" class="btn btn-sa">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Admin Create Modal -->
+<div class="modal-overlay" id="adminModal">
+  <div class="modal">
+    <h2 class="modal-title">New Admin</h2>
+    <div id="adminError" class="error-msg"></div>
+    <form id="adminForm">
+      <div class="form-group"><label class="form-label">Organization *</label><select class="form-select" id="adminOrg" required></select></div>
+      <div class="form-group"><label class="form-label">Name *</label><input class="form-input" type="text" id="adminName" required maxlength="200"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Email *</label><input class="form-input" type="email" id="adminEmail" required maxlength="200"></div>
+        <div class="form-group"><label class="form-label">Phone</label><input class="form-input" type="tel" id="adminPhone" maxlength="20"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Password * (min 8 chars)</label><input class="form-input" type="password" id="adminPw" required minlength="8" maxlength="100"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="App.closeModal('adminModal')">Cancel</button>
+        <button type="submit" class="btn btn-sa">Create Admin</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Supervisor Create Modal -->
+<div class="modal-overlay" id="supModal">
+  <div class="modal">
+    <h2 class="modal-title">New Supervisor</h2>
+    <div id="supError" class="error-msg"></div>
+    <form id="supForm">
+      <div class="form-group"><label class="form-label">Organization *</label><select class="form-select" id="supOrg" required></select></div>
+      <div class="form-group"><label class="form-label">Name *</label><input class="form-input" type="text" id="supName" required maxlength="200"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Email *</label><input class="form-input" type="email" id="supEmail" required maxlength="200"></div>
+        <div class="form-group"><label class="form-label">Phone</label><input class="form-input" type="tel" id="supPhone" maxlength="20"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Password * (min 8 chars)</label><input class="form-input" type="password" id="supPw" required minlength="8" maxlength="100"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="App.closeModal('supModal')">Cancel</button>
+        <button type="submit" class="btn btn-sa">Create Supervisor</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Worker Modal -->
+<div class="modal-overlay" id="workerModal">
+  <div class="modal">
+    <h2 class="modal-title" id="workerModalTitle">New Worker</h2>
+    <div id="workerError" class="error-msg"></div>
+    <form id="workerForm">
+      <input type="hidden" id="wId">
+      <div class="form-group" id="wOrgGroup"><label class="form-label">Organization *</label><select class="form-select" id="wOrg" required></select></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Name *</label><input class="form-input" type="text" id="wName" required maxlength="200"></div>
+        <div class="form-group"><label class="form-label">Employee ID</label><input class="form-input" type="text" id="wEmpId" maxlength="50"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Phone</label><input class="form-input" type="tel" id="wPhone" maxlength="20"></div>
+        <div class="form-group"><label class="form-label">Email</label><input class="form-input" type="email" id="wEmail" maxlength="200"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Department</label><input class="form-input" type="text" id="wDept" maxlength="100"></div>
+        <div class="form-group"><label class="form-label">Designation</label><input class="form-input" type="text" id="wDesig" maxlength="100"></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="App.closeModal('workerModal')">Cancel</button>
+        <button type="submit" class="btn btn-sa">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Edit User Modal -->
+<div class="modal-overlay" id="editUserModal">
+  <div class="modal" style="max-width:420px">
+    <h2 class="modal-title">Edit User</h2>
+    <div id="editUserError" class="error-msg"></div>
+    <form id="editUserForm">
+      <input type="hidden" id="euId">
+      <input type="hidden" id="euRole">
+      <div class="form-group"><label class="form-label">Organization</label><select class="form-select" id="euOrg"></select></div>
+      <div class="form-group"><label class="form-label">Name</label><input class="form-input" type="text" id="euName" required maxlength="200"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Email</label><input class="form-input" type="email" id="euEmail" required maxlength="200"></div>
+        <div class="form-group"><label class="form-label">Phone</label><input class="form-input" type="tel" id="euPhone" maxlength="20"></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="App.closeModal('editUserModal')">Cancel</button>
+        <button type="submit" class="btn btn-sa" id="euSubmitBtn">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Password Reset Modal -->
+<div class="modal-overlay" id="pwModal">
+  <div class="modal" style="max-width:400px">
+    <h2 class="modal-title">Reset Password</h2>
+    <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:.75rem">Set a new password for <b id="pwUserName"></b></p>
+    <div id="pwError" class="error-msg"></div>
+    <form id="pwForm">
+      <input type="hidden" id="pwUserId">
+      <div class="form-group"><label class="form-label">New Password * (min 8 chars)</label><input class="form-input" type="password" id="pwNew" required minlength="8" maxlength="100"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="App.closeModal('pwModal')">Cancel</button>
+        <button type="submit" class="btn btn-danger">Reset Password</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="/js/app.js"></script>
+<script src="/js/custom-select.js"></script>
+<script>
+var esc = App.esc, $ = App.$, fmtDate = App.fmtDate;
+
+// Auth check
+var token = App.getToken();
+var user = App.getUser();
+if (!token || user.role !== 'SUPER_ADMIN') { App.logoutSA(); throw ''; }
+App.buildUserMenu(user, 'superadmin');
+sessionStorage.removeItem('selectedOrgId');
+sessionStorage.removeItem('selectedOrgName');
+
+var allOrgs = [];
+var _orgSearchTimer = null;
+function debouncedOrgSearch() {
+  clearTimeout(_orgSearchTimer);
+  _orgSearchTimer = setTimeout(loadOrgs, 300);
+}
+
+// ─── Tab Management ───
+document.querySelectorAll('.sa-tab').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var tab = this.getAttribute('data-tab');
+    document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+    document.querySelectorAll('.sa-tab').forEach(function(t) { t.classList.remove('active'); });
+    $('tab-' + tab).classList.add('active');
+    this.classList.add('active');
+    if (tab === 'admins') loadUsers('ADMIN');
+    if (tab === 'supervisors') loadUsers('SUPERVISOR');
+    if (tab === 'analytics') loadAnalyticsTab();
+    if (tab === 'audit') loadAuditLogs(true);
+  });
+});
+
+// ─── Load Stats ───
+async function loadStats() {
+  var data = await App.apiFetchJson('/superadmin/analytics');
+  if (!data) return;
+  $('statsGrid').innerHTML =
+    statCard('Organizations', data.totalOrgs, 'Active: ' + data.activeOrgs, '') +
+    statCard('Admins', data.totalAdmins, 'Across all orgs', '') +
+    statCard('Supervisors', data.totalSupervisors, 'Across all orgs', '') +
+    statCard('Workers', data.totalWorkers, 'Active workers', '') +
+    statCard('Cleaning Records', data.totalRecords, 'Today: ' + data.todayRecords + ' · 7d: ' + (data.recordsLast7Days || 0), 'success') +
+    statCard('Images Uploaded', data.totalImages, 'Avg/record: ' + (data.avgImagesPerRecord || '0'), '') +
+    statCard('Tickets', data.totalTickets, 'Open: ' + data.openTickets, data.openTickets > 0 ? 'warn' : '') +
+    statCard('Locations', data.totalLocations, 'Active locations', '');
+}
+
+function statCard(label, value, sub, cls) {
+  return '<div class="sa-stat ' + (cls || '') + '">' +
+    '<div class="sa-stat-value">' + (value != null ? value : 0) + '</div>' +
+    '<div class="sa-stat-label">' + esc(label) + '</div>' +
+    (sub ? '<div class="sa-stat-sub">' + esc(sub) + '</div>' : '') +
+  '</div>';
+}
+
+// ─── Organizations ───
+async function loadOrgs() {
+  var search = $('orgSearch').value.trim();
+  var url = '/superadmin/organizations' + (search ? '?search=' + encodeURIComponent(search) : '');
+  var orgs = await App.apiFetchJson(url);
+  if (!orgs) return;
+  allOrgs = orgs;
+  populateOrgSelects();
+  if (!orgs.length) {
+    $('orgBody').innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-state-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".5"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/><path d="M9 9v.01"/><path d="M9 12v.01"/><path d="M9 15v.01"/><path d="M9 18v.01"/></svg></div>No organizations found</div></td></tr>';
+    return;
+  }
+  $('orgBody').innerHTML = orgs.map(function(o) {
+    var sCls = o.status === 'ACTIVE' ? 'status-active' : o.status === 'SUSPENDED' ? 'status-suspended' : 'status-deleted';
+    return '<tr>' +
+      '<td class="name-cell"><b>' + esc(o.name) + '</b></td>' +
+      '<td>' + esc(o.type || '—') + '</td>' +
+      '<td class="hide-mobile">' + esc(o.phone || '—') + '</td>' +
+      '<td><span class="status-badge ' + sCls + '">' + o.status + '</span></td>' +
+      '<td class="hide-mobile">' + ((o._count && o._count.users) || 0) + '</td>' +
+      '<td class="hide-mobile">' + ((o._count && o._count.workers) || 0) + '</td>' +
+      '<td class="actions-cell">' +
+        '<button class="btn btn-sm btn-sa" onclick="enterOrg(\'' + o.id + '\',\'' + esc(o.name).replace(/'/g, "\\'") + '\')">Enter</button>' +
+        '<button class="btn btn-sm btn-outline" onclick="editOrg(\'' + o.id + '\')">Edit</button>' +
+        (o.status !== 'DELETED' ? '<button class="btn btn-sm btn-danger" onclick="deleteOrg(\'' + o.id + '\')">Delete</button>' : '') +
+      '</td></tr>';
+  }).join('');
+}
+
+function populateOrgSelects() {
+  var active = allOrgs.filter(function(o) { return o.status === 'ACTIVE'; });
+  var opts = active.map(function(o) { return '<option value="' + o.id + '">' + esc(o.name) + '</option>'; }).join('');
+  var allOpt = '<option value="">All Organizations</option>' + opts;
+  var selOpt = '<option value="">Select Organization</option>' + opts;
+  $('adminOrgFilter').innerHTML = allOpt;
+  $('supOrgFilter').innerHTML = allOpt;
+  $('workerOrgFilter').innerHTML = selOpt;
+  $('auditOrgFilter').innerHTML = allOpt;
+  $('adminOrg').innerHTML = opts || '<option value="" disabled>No active orgs — create one first</option>';
+  $('supOrg').innerHTML = opts || '<option value="" disabled>No active orgs — create one first</option>';
+  $('wOrg').innerHTML = opts || '<option value="" disabled>No active orgs — create one first</option>';
+}
+
+function enterOrg(orgId, orgName) {
+  sessionStorage.setItem('selectedOrgId', orgId);
+  sessionStorage.setItem('selectedOrgName', orgName);
+  location.href = '/admin-dashboard';
+}
+
+function openOrgModal() {
+  $('orgForm').reset(); $('orgId').value = '';
+  $('orgModalTitle').textContent = 'New Organization';
+  $('orgStatusGroup').style.display = 'none';
+  App.hideError('orgError');
+  App.openModal('orgModal');
+}
+
+async function editOrg(id) {
+  var org = allOrgs.find(function(o) { return o.id === id; });
+  if (!org) return;
+  $('orgModalTitle').textContent = 'Edit Organization';
+  $('orgId').value = org.id;
+  $('orgName').value = org.name;
+  $('orgType').value = org.type || 'HOTEL';
+  $('orgPhone').value = org.phone || '';
+  $('orgEmail').value = org.email || '';
+  $('orgAddress').value = org.address || '';
+  $('orgStatus').value = org.status;
+  $('orgStatusGroup').style.display = '';
+  App.hideError('orgError');
+  App.openModal('orgModal');
+}
+
+$('orgForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  var id = $('orgId').value;
+  var body = { name: $('orgName').value.trim(), type: $('orgType').value };
+  var v = $('orgPhone').value.trim(); if (v) body.phone = v; else body.phone = '';
+  v = $('orgEmail').value.trim(); if (v) body.email = v; else body.email = '';
+  v = $('orgAddress').value.trim(); if (v) body.address = v; else body.address = '';
+  if (id) body.status = $('orgStatus').value;
+  var btn = e.target.querySelector('[type=submit]'); btn.disabled = true; btn.textContent = 'Saving…';
+  var res = await App.apiFetch(id ? '/superadmin/organizations/' + id : '/superadmin/organizations', { method: id ? 'PATCH' : 'POST', body: JSON.stringify(body) });
+  btn.disabled = false; btn.textContent = 'Save';
+  if (!res) return;
+  if (!res.ok) { var d = await res.json(); App.showError('orgError', d.error || 'Failed'); return; }
+  App.closeModal('orgModal'); App.toast(id ? 'Organization updated' : 'Organization created', 'success');
+  loadOrgs(); loadStats();
+});
+
+async function deleteOrg(id) {
+  if (!await App.confirmDialog('Delete this organization? It will be purged after 30 days.')) return;
+  var res = await App.apiFetch('/superadmin/organizations/' + id, { method: 'DELETE' });
+  if (!res) return;
+  if (!res.ok) { App.toast('Failed to delete', 'error'); return; }
+  App.toast('Organization deleted', 'success'); loadOrgs(); loadStats();
+}
+
+// ─── Users (Admins / Supervisors) ───
+async function loadUsers(role) {
+  var filterEl = role === 'ADMIN' ? $('adminOrgFilter') : $('supOrgFilter');
+  var bodyEl = role === 'ADMIN' ? $('adminBody') : $('supBody');
+  var orgId = filterEl.value;
+  var params = ['role=' + role];
+  if (orgId) params.push('orgId=' + orgId);
+  var users = await App.apiFetchJson('/superadmin/users?' + params.join('&'));
+  if (!users) return;
+  if (!users.length) {
+    var _emptyIcon = role === 'ADMIN' ? '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".5"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>' : '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>';
+    bodyEl.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-state-icon">' + _emptyIcon + '</div>No ' + role.toLowerCase() + 's found. Click "+ New ' + (role === 'ADMIN' ? 'Admin' : 'Supervisor') + '" to create one.</div></td></tr>';
+    return;
+  }
+  bodyEl.innerHTML = users.map(function(u) {
+    var statusCls = u.isActive !== false ? 'status-active' : 'status-inactive';
+    var statusText = u.isActive !== false ? 'Active' : 'Inactive';
+    return '<tr>' +
+      '<td class="name-cell"><b>' + esc(u.name) + '</b></td>' +
+      '<td>' + esc(u.email) + '</td>' +
+      '<td class="hide-mobile">' + esc(u.phone || '—') + '</td>' +
+      '<td class="hide-mobile">' + esc(u.organization ? u.organization.name : '—') + '</td>' +
+      '<td><span class="status-badge ' + statusCls + '">' + statusText + '</span></td>' +
+      '<td class="actions-cell">' +
+        '<button class="btn btn-sm btn-outline" onclick="openEditUser(\'' + u.id + '\',\'' + esc(u.name).replace(/'/g, "\\'") + '\',\'' + esc(u.email) + '\',\'' + esc(u.phone || '') + '\',\'' + role + '\',\'' + (u.orgId || '') + '\')">Edit</button>' +
+        '<button class="btn btn-sm btn-outline" onclick="openPwReset(\'' + u.id + '\',\'' + esc(u.name).replace(/'/g, "\\'") + '\')">Reset PW</button>' +
+        (u.isActive !== false ?
+          '<button class="btn btn-sm btn-danger" onclick="toggleUserActive(\'' + u.id + '\',false,\'' + role + '\')">Deactivate</button>' :
+          '<button class="btn btn-sm btn-success" onclick="toggleUserActive(\'' + u.id + '\',true,\'' + role + '\')">Activate</button>') +
+      '</td></tr>';
+  }).join('');
+}
+
+function openEditUser(id, name, email, phone, role, orgId) {
+  $('euId').value = id; $('euName').value = name; $('euEmail').value = email; $('euPhone').value = phone; $('euRole').value = role;
+  // Populate org select from cached allOrgs
+  var active = allOrgs.filter(function(o) { return o.status === 'ACTIVE'; });
+  $('euOrg').innerHTML = active.map(function(o) { return '<option value="' + o.id + '"' + (o.id === orgId ? ' selected' : '') + '>' + esc(o.name) + '</option>'; }).join('');
+  App.hideError('editUserError');
+  App.openModal('editUserModal');
+}
+
+$('editUserForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  var id = $('euId').value;
+  var body = { name: $('euName').value.trim(), email: $('euEmail').value.trim() };
+  var phone = $('euPhone').value.trim(); if (phone) body.phone = phone; else body.phone = '';
+  var orgId = $('euOrg').value; if (orgId) body.orgId = orgId;
+  var btn = $('euSubmitBtn'); btn.disabled = true; btn.textContent = 'Saving…';
+  var res = await App.apiFetch('/superadmin/users/' + id, { method: 'PATCH', body: JSON.stringify(body) });
+  btn.disabled = false; btn.textContent = 'Save Changes';
+  if (!res) return;
+  if (!res.ok) { var d = await res.json(); App.showError('editUserError', d.error || 'Failed'); return; }
+  App.closeModal('editUserModal'); App.toast('User updated', 'success');
+  loadUsers($('euRole').value || 'ADMIN');
+});
+
+async function toggleUserActive(id, activate, role) {
+  if (!await App.confirmDialog(activate ? 'Activate this user?' : 'Deactivate this user? They will be unable to log in.')) return;
+  var res = await App.apiFetch('/superadmin/users/' + id, { method: 'PATCH', body: JSON.stringify({ isActive: activate }) });
+  if (!res) return;
+  if (!res.ok) { App.toast('Failed', 'error'); return; }
+  App.toast(activate ? 'User activated' : 'User deactivated', 'success'); loadUsers(role); loadStats();
+}
+
+function openPwReset(userId, userName) {
+  $('pwUserId').value = userId; $('pwForm').reset(); $('pwUserName').textContent = userName || 'this user';
+  App.hideError('pwError');
+  App.openModal('pwModal');
+}
+
+$('pwForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  var btn = e.target.querySelector('[type=submit]'); btn.disabled = true; btn.textContent = 'Resetting…';
+  var res = await App.apiFetch('/superadmin/users/' + $('pwUserId').value + '/password', { method: 'PATCH', body: JSON.stringify({ password: $('pwNew').value }) });
+  btn.disabled = false; btn.textContent = 'Reset Password';
+  if (!res) return;
+  if (!res.ok) { var d = await res.json(); App.showError('pwError', d.error || 'Failed'); return; }
+  App.closeModal('pwModal'); App.toast('Password reset successfully', 'success');
+});
+
+// Admin Create
+function openAdminModal() {
+  if (!$('adminOrg').value && $('adminOrg').options.length === 0) {
+    App.toast('Create an organization first', 'warning'); return;
+  }
+  $('adminForm').reset(); App.hideError('adminError'); App.openModal('adminModal');
+}
+
+$('adminForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  var orgId = $('adminOrg').value;
+  if (!orgId) { App.showError('adminError', 'Select an organization'); return; }
+  var body = { name: $('adminName').value.trim(), email: $('adminEmail').value.trim(), password: $('adminPw').value };
+  var phone = $('adminPhone').value.trim(); if (phone) body.phone = phone;
+  var btn = e.target.querySelector('[type=submit]'); btn.disabled = true; btn.textContent = 'Creating…';
+  var res = await App.apiFetch('/superadmin/organizations/' + orgId + '/admins', { method: 'POST', body: JSON.stringify(body) });
+  btn.disabled = false; btn.textContent = 'Create Admin';
+  if (!res) return;
+  if (!res.ok) { var d = await res.json(); App.showError('adminError', d.error || 'Failed'); return; }
+  App.closeModal('adminModal'); App.toast('Admin created successfully', 'success'); loadUsers('ADMIN'); loadStats();
+});
+
+// Supervisor Create
+function openSupModal() {
+  if (!$('supOrg').value && $('supOrg').options.length === 0) {
+    App.toast('Create an organization first', 'warning'); return;
+  }
+  $('supForm').reset(); App.hideError('supError'); App.openModal('supModal');
+}
+
+$('supForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  var orgId = $('supOrg').value;
+  if (!orgId) { App.showError('supError', 'Select an organization'); return; }
+  var body = { name: $('supName').value.trim(), email: $('supEmail').value.trim(), password: $('supPw').value };
+  var phone = $('supPhone').value.trim(); if (phone) body.phone = phone;
+  var btn = e.target.querySelector('[type=submit]'); btn.disabled = true; btn.textContent = 'Creating…';
+  var res = await App.apiFetch('/superadmin/organizations/' + orgId + '/supervisors', { method: 'POST', body: JSON.stringify(body) });
+  btn.disabled = false; btn.textContent = 'Create Supervisor';
+  if (!res) return;
+  if (!res.ok) { var d = await res.json(); App.showError('supError', d.error || 'Failed'); return; }
+  App.closeModal('supModal'); App.toast('Supervisor created successfully', 'success'); loadUsers('SUPERVISOR'); loadStats();
+});
+
+// ─── Workers ───
+async function loadWorkers() {
+  var orgId = $('workerOrgFilter').value;
+  if (!orgId) { $('workerBody').innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-state-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg></div>Select an organization above</div></td></tr>'; return; }
+  var workers = await App.apiFetchJson('/superadmin/organizations/' + orgId + '/workers');
+  if (!workers) return;
+  if (!workers.length) {
+    $('workerBody').innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-state-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg></div>No workers in this org</div></td></tr>';
+    return;
+  }
+  $('workerBody').innerHTML = workers.map(function(w) {
+    return '<tr>' +
+      '<td class="name-cell"><b>' + esc(w.name) + '</b></td>' +
+      '<td>' + esc(w.employeeId || '—') + '</td>' +
+      '<td class="hide-mobile">' + esc(w.phone || '—') + '</td>' +
+      '<td class="hide-mobile">' + esc(w.department || '—') + '</td>' +
+      '<td>' + ((w._count && w._count.cleaningRecords) || 0) + '</td>' +
+      '<td class="actions-cell">' +
+        '<button class="btn btn-sm btn-outline" onclick="openWorkerEdit(\'' + w.id + '\',\'' + esc(w.name) + '\',\'' + esc(w.employeeId || '') + '\',\'' + esc(w.phone || '') + '\',\'' + esc(w.email || '') + '\',\'' + esc(w.department || '') + '\',\'' + esc(w.designation || '') + '\')">Edit</button>' +
+        (w.isActive !== false ?
+          '<button class="btn btn-sm btn-danger" onclick="toggleWorker(\'' + w.id + '\',false)">Deactivate</button>' :
+          '<button class="btn btn-sm btn-success" onclick="toggleWorker(\'' + w.id + '\',true)">Activate</button>') +
+      '</td></tr>';
+  }).join('');
+}
+
+function openWorkerModal() {
+  $('workerModalTitle').textContent = 'New Worker';
+  $('workerForm').reset(); $('wId').value = '';
+  $('wOrgGroup').style.display = '';
+  App.hideError('workerError');
+  App.openModal('workerModal');
+}
+
+function openWorkerEdit(id, name, empId, phone, email, dept, desig) {
+  $('workerModalTitle').textContent = 'Edit Worker';
+  $('wId').value = id; $('wName').value = name; $('wEmpId').value = empId;
+  $('wPhone').value = phone; $('wEmail').value = email;
+  $('wDept').value = dept; $('wDesig').value = desig;
+  $('wOrgGroup').style.display = 'none';
+  App.hideError('workerError');
+  App.openModal('workerModal');
+}
+
+$('workerForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  var id = $('wId').value;
+  var body = { name: $('wName').value.trim() };
+  var v = $('wEmpId').value.trim(); body.employeeId = v || '';
+  v = $('wPhone').value.trim(); body.phone = v || '';
+  v = $('wEmail').value.trim(); body.email = v || '';
+  v = $('wDept').value.trim(); body.department = v || '';
+  v = $('wDesig').value.trim(); body.designation = v || '';
+  var url, method;
+  if (id) { url = '/superadmin/workers/' + id; method = 'PATCH'; }
+  else { url = '/superadmin/organizations/' + $('wOrg').value + '/workers'; method = 'POST'; }
+  var btn = e.target.querySelector('[type=submit]'); btn.disabled = true; btn.textContent = 'Saving…';
+  var res = await App.apiFetch(url, { method: method, body: JSON.stringify(body) });
+  btn.disabled = false; btn.textContent = 'Save';
+  if (!res) return;
+  if (!res.ok) { var d = await res.json(); App.showError('workerError', d.error || 'Failed'); return; }
+  App.closeModal('workerModal'); App.toast(id ? 'Worker updated' : 'Worker created', 'success'); loadWorkers();
+});
+
+async function toggleWorker(id, activate) {
+  if (!await App.confirmDialog(activate ? 'Activate this worker?' : 'Deactivate this worker?')) return;
+  var res = await App.apiFetch('/superadmin/workers/' + id, { method: 'PATCH', body: JSON.stringify({ isActive: activate }) });
+  if (!res) return;
+  if (!res.ok) { App.toast('Failed', 'error'); return; }
+  App.toast(activate ? 'Worker activated' : 'Worker deactivated', 'success'); loadWorkers();
+}
+
+// ─── Analytics ───
+async function loadAnalyticsTab() {
+  var data = await App.apiFetchJson('/superadmin/analytics');
+  if (!data) return;
+
+  // System metrics
+  $('metricsGrid').innerHTML =
+    metricCard(data.totalRecords || 0, 'Total Records') +
+    metricCard(data.todayRecords || 0, 'Today\'s Records') +
+    metricCard(data.totalImages || 0, 'Total Images') +
+    metricCard(data.avgImagesPerRecord || '0', 'Avg Images/Record') +
+    metricCard(data.totalTickets || 0, 'Total Tickets') +
+    metricCard(data.openTickets || 0, 'Open Tickets') +
+    metricCard(data.totalLocations || 0, 'Locations') +
+    metricCard(data.recordsLast7Days || 0, 'Records (7 Days)');
+
+  // 7-day trend
+  if (data.dailyTrend && data.dailyTrend.length) {
+    var max = Math.max.apply(null, data.dailyTrend.map(function(d) { return d.count; }));
+    if (max === 0) max = 1;
+    $('trendChart').innerHTML = data.dailyTrend.map(function(d) {
+      var pct = Math.round((d.count / max) * 100);
+      var day = new Date(d.date).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric' });
+      return '<div class="trend-bar"><div class="trend-bar-value">' + d.count + '</div><div class="trend-bar-fill" style="height:' + Math.max(pct, 4) + '%"></div><div class="trend-bar-label">' + day + '</div></div>';
+    }).join('');
+  } else {
+    $('trendChart').innerHTML = '<div class="empty-state">No cleaning data in the last 7 days</div>';
+  }
+
+  // Per-org breakdown
+  var orgsData = await App.apiFetchJson('/superadmin/analytics/orgs');
+  if (orgsData && orgsData.length) {
+    $('orgBreakdown').innerHTML = orgsData.map(function(o) {
+      var c = o._count || {};
+      return '<div class="org-card"><h4>' + esc(o.name) + ' <span class="status-badge status-' + o.status.toLowerCase() + '" style="font-size:.65rem">' + o.status + '</span></h4><div class="org-card-stats">' +
+        '<span>Users: ' + (c.users || 0) + '</span>' +
+        '<span>Workers: ' + (c.workers || 0) + '</span>' +
+        '<span>Locations: ' + (c.locations || 0) + '</span>' +
+        '<span>Records: ' + (c.cleaningRecords || 0) + '</span>' +
+        '<span>Images: ' + (o.imageCount || 0) + '</span>' +
+        '<span>Tickets: ' + (c.tickets || 0) + '</span>' +
+      '</div></div>';
+    }).join('');
+  } else {
+    $('orgBreakdown').innerHTML = '<div class="empty-state">No organizations yet</div>';
+  }
+}
+
+function metricCard(val, label) {
+  return '<div class="metric-card"><div class="metric-val">' + val + '</div><div class="metric-label">' + esc(label) + '</div></div>';
+}
+
+// ─── Audit Logs ───
+var auditOffset = 0;
+var auditLimit = 30;
+
+async function loadAuditLogs(reset) {
+  if (reset) auditOffset = 0;
+  var params = ['limit=' + auditLimit, 'offset=' + auditOffset];
+  var orgId = $('auditOrgFilter').value;
+  var action = $('auditActionFilter').value;
+  if (orgId) params.push('orgId=' + orgId);
+  if (action) params.push('action=' + encodeURIComponent(action));
+
+  var data = await App.apiFetchJson('/superadmin/audit-logs?' + params.join('&'));
+  if (!data) return;
+
+  $('auditCount').textContent = data.total > 0 ? ('Showing ' + Math.min(auditOffset + 1, data.total) + '–' + Math.min(auditOffset + data.logs.length, data.total) + ' of ' + data.total) : '';
+
+  if (!data.logs.length) {
+    $('auditList').innerHTML = '<div class="empty-state"><div class="empty-state-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></div>No audit logs found</div>';
+    $('auditPagination').innerHTML = '';
+    return;
+  }
+
+  $('auditList').innerHTML = data.logs.map(function(log) {
+    var dotClass = 'audit-dot';
+    if (log.action.indexOf('admin') !== -1) dotClass += ' admin';
+    else if (log.action.indexOf('supervisor') !== -1) dotClass += ' supervisor';
+    else if (log.action.indexOf('worker') !== -1) dotClass += ' worker';
+
+    var actionLabel = formatAction(log.action);
+    var details = '';
+    if (log.newValue) {
+      try {
+        var nv = typeof log.newValue === 'string' ? JSON.parse(log.newValue) : log.newValue;
+        var parts = [];
+        for (var k in nv) {
+          if (nv.hasOwnProperty(k) && k !== 'passwordHash') parts.push(k + ': ' + nv[k]);
+        }
+        if (parts.length) details = parts.join(' · ');
+      } catch(e) {}
+    }
+
+    return '<div class="audit-item">' +
+      '<div class="' + dotClass + '"></div>' +
+      '<div class="audit-body">' +
+        '<div class="audit-action">' + esc(actionLabel) + '</div>' +
+        '<div class="audit-meta">' +
+          'By <b>' + esc(log.actorName || 'System') + '</b>' +
+          (log.actorRole ? ' (' + log.actorRole + ')' : '') +
+          (log.orgName ? ' · ' + esc(log.orgName) : '') +
+          ' · ' + fmtDate(log.createdAt) +
+        '</div>' +
+        (details ? '<div class="audit-details">' + esc(details) + '</div>' : '') +
+      '</div></div>';
+  }).join('');
+
+  // Pagination
+  var html = '';
+  if (auditOffset > 0) html += '<button class="btn btn-sm btn-outline" onclick="auditPage(-1)">← Previous</button>';
+  if (auditOffset + auditLimit < data.total) html += '<button class="btn btn-sm btn-sa" onclick="auditPage(1)">Next →</button>';
+  $('auditPagination').innerHTML = html;
+}
+
+function auditPage(dir) {
+  auditOffset += dir * auditLimit;
+  if (auditOffset < 0) auditOffset = 0;
+  loadAuditLogs(false);
+}
+
+function formatAction(action) {
+  var labels = {
+    'organization_created': 'Organization Created',
+    'organization_updated': 'Organization Updated',
+    'organization_deleted': 'Organization Deleted',
+    'admin_created': 'Admin Created',
+    'supervisor_created': 'Supervisor Created',
+    'worker_created': 'Worker Created',
+    'user_updated': 'User Updated',
+    'user_transferred': 'User Transferred',
+    'password_reset': 'Password Reset',
+    'ticket_created': 'Ticket Created',
+    'ticket_updated': 'Ticket Updated',
+    'ticket_public_create': 'Public Ticket Submitted',
+    'ticket_accepted': 'Ticket Accepted',
+    'ticket_resolved': 'Ticket Resolved',
+    'cleaning_completed': 'Cleaning Completed'
+  };
+  return labels[action] || action.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+}
+
+// ─── Init ───
+loadStats();
+loadOrgs();
+</script>
+</body>
+</html>

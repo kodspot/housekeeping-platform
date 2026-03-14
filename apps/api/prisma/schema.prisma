@@ -1,0 +1,336 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id   String  @id @default(uuid())
+  name String
+  type String? // "hospital", "hotel", "office", etc.
+
+  address String?
+  phone   String?
+  email   String?
+  logoUrl String?
+
+  status OrgStatus @default(ACTIVE)
+
+  users             User[]
+  workers           Worker[]
+  locations         Location[]
+  cleaningRecords   CleaningRecord[]
+  cleaningSchedules CleaningSchedule[]
+  tickets           Ticket[]
+  auditLogs         AuditLog[]
+  notifications     Notification[]
+
+  deletedAt  DateTime?
+  purgeAfter DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+model User {
+  id    String        @id @default(uuid())
+  orgId String?
+  org   Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  name         String
+  email        String
+  phone        String?
+  designation  String?
+  employeeId   String?
+  department   String?
+  gender       String?
+  bloodGroup   String?
+  dateOfBirth  DateTime?
+  dateOfJoin   DateTime?
+  address      String?
+  aadharNo     String?
+  notes        String?
+  passwordHash String
+  role         UserRole
+
+  isActive Boolean @default(true)
+
+  cleaningRecords CleaningRecord[] @relation("VerifiedBy")
+  ticketsCreated  Ticket[]         @relation("TicketCreatedBy")
+  ticketsAssigned Ticket[]         @relation("TicketAssignedTo")
+  notifications   Notification[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([orgId, email])
+  @@index([orgId, role])
+  @@index([orgId, isActive])
+  @@index([email])
+}
+
+model Worker {
+  id    String       @id @default(uuid())
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  employeeId String?  // Unique worker ID within org (e.g., EMP-001)
+  name       String
+  phone      String?
+  email      String?
+  address    String?
+  department String?  // e.g., "Housekeeping", "Maintenance"
+  designation String? // e.g., "Room Attendant", "Floor Supervisor"
+  dateOfBirth DateTime?
+  dateOfJoin  DateTime?
+  gender     String?  // "Male", "Female", "Other"
+  bloodGroup String?
+  aadharNo   String?  // ID proof
+  notes      String?
+  isActive   Boolean  @default(true)
+
+  cleaningRecords CleaningRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([orgId, employeeId])
+  @@unique([orgId, name])
+  @@index([orgId, isActive])
+}
+
+model Location {
+  id       String       @id @default(uuid())
+  orgId    String
+  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  parentId String?
+  parent   Location?    @relation("LocationHierarchy", fields: [parentId], references: [id])
+  children Location[]   @relation("LocationHierarchy")
+
+  name      String
+  type      LocationType
+  qrCode    String       @unique
+  sortOrder Int          @default(0)
+  isActive  Boolean      @default(true)
+  notes     String?
+
+  cleaningRecords   CleaningRecord[]
+  cleaningSchedules CleaningSchedule[]
+  tickets           Ticket[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId, parentId])
+  @@index([orgId, type])
+  @@index([orgId, isActive])
+}
+
+model CleaningSchedule {
+  id         String       @id @default(uuid())
+  orgId      String
+  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  locationId String
+  location   Location     @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  frequency CleaningFrequency
+  shifts    Shift[]
+  notes     String?
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([locationId])
+  @@index([orgId, isActive])
+}
+
+model CleaningRecord {
+  id    String       @id @default(uuid())
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  locationId   String
+  location     Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  supervisorId String
+  supervisor   User     @relation("VerifiedBy", fields: [supervisorId], references: [id])
+
+  workers Worker[]
+  images  CleaningImage[]
+
+  shift  Shift                @default(GENERAL)
+  notes  String?
+  status CleaningRecordStatus @default(SUBMITTED)
+
+  // Shift validation tracking
+  expectedShift Shift?           // Auto-detected shift based on server time
+  isLate        Boolean @default(false) // Submitted outside the shift window
+  lateReason    String?          // Reason provided when submitting late/cross-shift
+
+  flagReason String?             // Reason provided when admin flags the record
+
+  cleanedAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId, cleanedAt])
+  @@index([orgId, locationId])
+  @@index([supervisorId, cleanedAt])
+  @@index([orgId, status])
+}
+
+model CleaningImage {
+  id               String         @id @default(uuid())
+  cleaningRecordId String
+  cleaningRecord   CleaningRecord @relation(fields: [cleaningRecordId], references: [id], onDelete: Cascade)
+
+  imageUrl String
+  caption  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([cleaningRecordId])
+}
+
+model Ticket {
+  id    String       @id @default(uuid())
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  locationId   String
+  location     Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  createdById  String?
+  createdBy    User?    @relation("TicketCreatedBy", fields: [createdById], references: [id])
+  assignedToId String?
+  assignedTo   User?    @relation("TicketAssignedTo", fields: [assignedToId], references: [id])
+
+  title       String
+  description String?
+  imageUrl         String?
+  priority         TicketPriority @default(NORMAL)
+  status           TicketStatus   @default(OPEN)
+  source           String         @default("INTERNAL") // INTERNAL or PUBLIC
+  guestName        String?
+  guestPhone       String?
+  issueType        String?        // For public: NOT_CLEAN, BAD_SMELL, BROKEN_EQUIPMENT, WATER_ISSUE, PEST, OTHER
+
+  resolvedImageUrl String?
+  resolvedNote     String?
+  resolvedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId, status])
+  @@index([orgId, locationId])
+  @@index([assignedToId, status])
+  @@index([orgId, createdAt])
+  @@index([orgId, source])
+}
+
+model AuditLog {
+  id    String        @id @default(uuid())
+  orgId String?
+  org   Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  actorType String
+  actorId   String?
+
+  action String
+
+  entityType String?
+  entityId   String?
+  oldValue   Json?
+  newValue   Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([orgId, createdAt])
+  @@index([action, createdAt])
+}
+
+model Notification {
+  id     String        @id @default(uuid())
+  orgId  String
+  org    Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  userId String
+  user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type     String   // ticket_assigned, ticket_created, ticket_resolved, public_complaint
+  title    String
+  body     String?
+  entityId String?  // ticket id or other entity
+  isRead   Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@index([orgId, createdAt])
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  SUPERVISOR
+}
+
+enum OrgStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum LocationType {
+  BUILDING
+  FLOOR
+  ROOM
+  CORRIDOR
+  WASHROOM
+  ICU
+  LOBBY
+  KITCHEN
+  WARD
+  MEETING_ROOM
+  OTHER
+}
+
+enum Shift {
+  MORNING
+  AFTERNOON
+  NIGHT
+  GENERAL
+}
+
+enum CleaningFrequency {
+  ONCE_DAILY
+  TWICE_DAILY
+  THRICE_DAILY
+  WEEKLY
+  CUSTOM
+}
+
+enum CleaningRecordStatus {
+  SUBMITTED
+  FLAGGED
+}
+
+enum TicketPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}

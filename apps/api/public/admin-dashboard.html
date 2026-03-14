@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="manifest" href="/site.webmanifest">
+<title>Dashboard — Housekeeping Admin</title>
+<link rel="stylesheet" href="/css/design-system.css">
+<style>
+/* ── Dashboard KPI Cards ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.75rem;margin-bottom:1.25rem}
+.kpi-card{background:var(--surface);border-radius:var(--radius-lg);padding:1rem 1.15rem;border:1px solid var(--border);box-shadow:var(--shadow-sm);position:relative;overflow:hidden;transition:box-shadow .15s}
+.kpi-card:hover{box-shadow:var(--shadow)}
+.kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:var(--radius-lg) var(--radius-lg) 0 0}
+.kpi-card.kpi-rooms::before{background:linear-gradient(90deg,#0ea5a4,#14b8a6)}
+.kpi-card.kpi-cleaned::before{background:linear-gradient(90deg,#10b981,#34d399)}
+.kpi-card.kpi-tickets::before{background:linear-gradient(90deg,#f59e0b,#fbbf24)}
+.kpi-card.kpi-workers::before{background:linear-gradient(90deg,#6366f1,#818cf8)}
+.kpi-card.kpi-supervisors::before{background:linear-gradient(90deg,#8b5cf6,#a78bfa)}
+.kpi-card.kpi-records::before{background:linear-gradient(90deg,#3b82f6,#60a5fa)}
+.kpi-label{font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
+.kpi-value{font-size:1.75rem;font-weight:700;line-height:1.2;margin-top:.1rem;color:var(--text)}
+.kpi-sub{font-size:.68rem;color:var(--text-muted);margin-top:.2rem}
+.kpi-sub b{color:var(--text);font-weight:600}
+
+/* ── Dashboard Grid ── */
+.dash-grid{display:grid;gap:1rem}
+.dash-grid-2{grid-template-columns:1fr 1fr}
+.dash-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.15rem;box-shadow:var(--shadow-sm);transition:box-shadow .15s}
+.dash-section-title{font-size:.95rem;font-weight:600;color:var(--text);margin-bottom:.75rem;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.dash-section-title .badge{font-size:.65rem}
+.dash-scroll{max-height:360px;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+
+/* ── Room Status Board ── */
+.status-summary{display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:.75rem;font-size:.78rem;color:var(--text-muted)}
+.status-summary b{color:var(--text);font-weight:600}
+.room-status-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:.45rem}
+.rs-card{padding:.5rem .65rem;border-radius:var(--radius);border:1px solid var(--border);font-size:.78rem;position:relative;cursor:default;transition:transform .1s,box-shadow .15s}
+.rs-card:hover{transform:translateY(-1px);box-shadow:var(--shadow)}
+.rs-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:.1rem;padding-right:14px}
+.rs-meta{font-size:.62rem;color:var(--text-muted)}
+.rs-dot{position:absolute;top:.5rem;right:.5rem;width:9px;height:9px;border-radius:50%}
+.rs-cleaned{background:#f0fdf4;border-color:#bbf7d0}.rs-cleaned .rs-dot{background:#16a34a}
+.rs-partial{background:#fffbeb;border-color:#fde68a}.rs-partial .rs-dot{background:#f59e0b}
+.rs-dirty{background:#fef2f2;border-color:#fecaca}.rs-dirty .rs-dot{background:#ef4444}
+.rs-nosched{background:var(--bg);border-color:var(--border)}.rs-nosched .rs-dot{background:#cbd5e1}
+
+/* ── Trend/Bar Chart ── */
+.trend-wrap{display:flex;align-items:flex-end;gap:0;height:140px;padding-top:.5rem}
+.trend-col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:.25rem;height:100%}
+.trend-val{font-size:.68rem;font-weight:600;color:var(--text)}
+.trend-fill{width:60%;min-width:18px;max-width:40px;border-radius:6px 6px 0 0;background:linear-gradient(180deg,#0ea5a4,#14b8a6);transition:height .3s ease;min-height:2px}
+.trend-day{font-size:.62rem;color:var(--text-muted);font-weight:500;white-space:nowrap}
+.trend-empty{text-align:center;color:var(--text-muted);padding:2.5rem 1rem;font-size:.85rem}
+
+/* ── Dashboard tables ── */
+.dash-table{width:100%;border-collapse:collapse;font-size:.8rem}
+.dash-table th{text-align:left;padding:.45rem .5rem;color:var(--text-muted);border-bottom:1px solid var(--border);font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
+.dash-table td{padding:.45rem .5rem;border-bottom:1px solid var(--border-light);vertical-align:middle}
+.dash-table tr:last-child td{border-bottom:none}
+.dash-table tr:hover td{background:rgba(14,165,164,.015)}
+
+/* ── Empty states ── */
+.dash-empty{text-align:center;padding:2rem 1rem;color:var(--text-muted)}
+.dash-empty-icon{font-size:1.5rem;margin-bottom:.4rem;display:block;opacity:.5}
+.dash-empty-text{font-size:.85rem}
+.dash-empty-sub{font-size:.72rem;margin-top:.2rem}
+
+/* ── Worker Performance ── */
+.perf-bars{display:flex;flex-direction:column;gap:.4rem}
+.perf-row{display:flex;align-items:center;gap:.6rem}
+.perf-name{font-size:.82rem;font-weight:500;min-width:80px;max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.perf-bar-wrap{flex:1;height:24px;background:var(--bg);border-radius:6px;overflow:hidden;position:relative}
+.perf-bar-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,#0ea5a4,#14b8a6);transition:width .4s ease;display:flex;align-items:center;padding:0 .5rem;min-width:fit-content}
+.perf-bar-label{font-size:.68rem;font-weight:600;color:#fff;white-space:nowrap}
+.perf-meta{font-size:.68rem;color:var(--text-muted);min-width:60px;text-align:right;flex-shrink:0}
+.perf-inactive{opacity:.45}
+
+/* ── Shift badge ── */
+.shift-badge{font-size:.62rem;padding:.12rem .4rem;border-radius:3px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;display:inline-block}
+.shift-morning{background:#fff7ed;color:#ea580c}
+.shift-afternoon{background:#eff6ff;color:#2563eb}
+.shift-night{background:#f5f3ff;color:#7c3aed}
+.shift-general{background:#f0fdf4;color:#16a34a}
+.shift-badges{display:flex;gap:.3rem;flex-wrap:wrap}
+
+/* ── Shift Progress Bars ── */
+.sp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.65rem}
+.sp-item{display:flex;flex-direction:column;gap:.25rem}
+.sp-label{display:flex;justify-content:space-between;align-items:center;font-size:.78rem}
+.sp-label b{font-weight:600;color:var(--text)}
+.sp-label span{font-size:.68rem;color:var(--text-muted)}
+.sp-bar{height:22px;background:var(--bg);border-radius:6px;overflow:hidden;position:relative}
+.sp-fill{height:100%;border-radius:6px;transition:width .5s ease;display:flex;align-items:center;justify-content:center;min-width:fit-content}
+.sp-fill-label{font-size:.62rem;font-weight:700;color:#fff;padding:0 .4rem}
+.sp-fill.sp-morning{background:linear-gradient(90deg,#f97316,#fb923c)}
+.sp-fill.sp-afternoon{background:linear-gradient(90deg,#3b82f6,#60a5fa)}
+.sp-fill.sp-night{background:linear-gradient(90deg,#8b5cf6,#a78bfa)}
+.sp-fill.sp-general{background:linear-gradient(90deg,#10b981,#34d399)}
+.completion-ring{display:inline-flex;align-items:center;gap:.5rem}
+.completion-pct{font-size:1.3rem;font-weight:800;color:var(--primary)}
+.completion-label{font-size:.72rem;color:var(--text-muted);line-height:1.2}
+
+/* ── Section Error State ── */
+.dash-error{text-align:center;padding:1.5rem 1rem;color:var(--danger-text);font-size:.82rem}
+.dash-error-icon{font-size:1.2rem;margin-bottom:.3rem;display:block;opacity:.6}
+
+/* ── Severity badge ── */
+.severity{font-size:.62rem;padding:.15rem .45rem;border-radius:4px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;display:inline-block}
+.severity-critical{background:#fef2f2;color:#dc2626;border:1px solid #fecaca}
+.severity-high{background:#fff7ed;color:#ea580c;border:1px solid #fed7aa}
+.severity-medium{background:#fffbeb;color:#d97706;border:1px solid #fde68a}
+.severity-low{background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0}
+
+/* ── Work Verification Log ── */
+.work-log{display:flex;flex-direction:column;gap:.75rem}
+.wl-card{border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--surface);overflow:hidden;transition:box-shadow .15s}
+.wl-card:hover{box-shadow:var(--shadow)}
+.wl-card.wl-flagged{border-color:#fecaca;background:#fffbfb}
+.wl-header{display:flex;align-items:flex-start;justify-content:space-between;padding:.75rem .85rem .5rem;gap:.5rem;flex-wrap:wrap}
+.wl-room{font-weight:700;font-size:.88rem;color:var(--text)}
+.wl-meta{display:flex;flex-wrap:wrap;gap:.3rem .75rem;padding:0 .85rem .5rem;font-size:.72rem;color:var(--text-muted)}
+.wl-meta-item{display:inline-flex;align-items:center;gap:.25rem}
+.wl-meta-item b{color:var(--text);font-weight:600}
+.wl-photos{display:flex;gap:.4rem;padding:.35rem .85rem .7rem;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory}
+.wl-photos::-webkit-scrollbar{height:4px}
+.wl-photos::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.wl-thumb{width:110px;height:85px;flex-shrink:0;border-radius:var(--radius);overflow:hidden;cursor:pointer;border:1px solid var(--border-light);position:relative;transition:transform .1s;scroll-snap-align:start}
+.wl-thumb:hover{transform:scale(1.03);box-shadow:var(--shadow-md)}
+.wl-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.wl-notes{padding:0 .85rem .65rem;font-size:.74rem;color:var(--text-muted);font-style:italic}
+.wl-status{font-size:.58rem;padding:.1rem .35rem;border-radius:3px;font-weight:700;text-transform:uppercase;flex-shrink:0}
+.wl-status-submitted{background:#f0fdf4;color:#16a34a}
+.wl-status-flagged{background:#fef2f2;color:#dc2626}
+
+/* ── Responsive ── */
+@media(max-width:1024px){
+  .kpi-grid{grid-template-columns:repeat(3,1fr)}
+  .dash-grid-2{grid-template-columns:1fr 1fr}
+}
+@media(max-width:768px){
+  .dash-grid-2{grid-template-columns:1fr}
+  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+  .room-status-grid{grid-template-columns:repeat(auto-fill,minmax(110px,1fr))}
+  .trend-wrap{height:120px}
+  .perf-name{min-width:70px;max-width:100px}
+  .sp-grid{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:480px){
+  .kpi-grid{grid-template-columns:repeat(2,1fr);gap:.5rem}
+  .kpi-card{padding:.75rem .85rem}
+  .kpi-value{font-size:1.4rem}
+  .dash-section{padding:.85rem}
+  .room-status-grid{grid-template-columns:repeat(auto-fill,minmax(100px,1fr))}
+  .status-summary{gap:.5rem;font-size:.72rem}
+  .wl-thumb{width:90px;height:70px}
+  .perf-name{min-width:60px;max-width:80px;font-size:.75rem}
+  .dash-table{font-size:.72rem}
+  .dash-table th,.dash-table td{padding:.35rem .35rem}
+  .sp-grid{grid-template-columns:1fr}
+}
+@media(prefers-reduced-motion:reduce){
+  .skeleton{animation:none !important}
+  .trend-fill,.sp-fill,.perf-bar-fill{transition:none !important}
+}
+/* Refresh bar */
+.dash-refresh{display:flex;align-items:center;justify-content:flex-end;gap:.6rem;padding:.35rem 0;font-size:.72rem;color:var(--text-muted)}
+.dash-refresh button{background:none;border:1px solid var(--border);border-radius:var(--radius);padding:.25rem .6rem;font-size:.72rem;cursor:pointer;color:var(--text-muted);display:inline-flex;align-items:center;gap:.3rem;transition:border-color .15s,color .15s}
+.dash-refresh button:hover{border-color:var(--primary);color:var(--primary)}
+.dash-refresh button.refreshing{opacity:.5;pointer-events:none}
+/* KPI trend arrow */
+.kpi-trend{font-size:.68rem;font-weight:600}
+.kpi-trend-up{color:#16a34a}
+.kpi-trend-down{color:#ef4444}
+.kpi-trend-flat{color:var(--text-muted)}
+</style>
+</head>
+<body>
+<nav class="topbar">
+  <div class="topbar-left">
+    <button class="nav-toggle" id="nav-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg></button>
+    <span class="topbar-brand">Housekeeping</span>
+    <div class="topbar-nav" id="topbar-nav"></div>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-user" id="userName"></span>
+    <button class="btn btn-sm btn-ghost" onclick="App.logout()">Logout</button>
+  </div>
+</nav>
+<div class="sa-banner" id="sa-banner"></div>
+
+<main class="container">
+  <!-- Refresh indicator -->
+  <div class="dash-refresh" id="refreshBar">
+    <span id="lastRefresh"></span>
+    <button onclick="manualRefresh()" id="refreshBtn">↻ Refresh</button>
+  </div>
+
+  <!-- KPI Cards -->
+  <div class="kpi-grid" id="kpiGrid"></div>
+
+  <!-- Shift Progress -->
+  <div class="dash-section" style="margin-bottom:1rem" id="shiftProgressSection">
+    <div class="dash-section-title">Today's Shift Progress</div>
+    <div id="shiftProgress"></div>
+  </div>
+
+  <!-- Row 1: Room Status + Trend -->
+  <div class="dash-grid dash-grid-2" style="margin-bottom:1rem">
+    <div class="dash-section">
+      <div class="dash-section-title">Room Status <span class="badge badge-info" id="roomBadge"></span></div>
+      <div id="statusSummary" class="status-summary"></div>
+      <div id="roomGrid" class="room-status-grid"></div>
+    </div>
+    <div class="dash-section">
+      <div class="dash-section-title">Cleaning Activity (7 Days)</div>
+      <div id="trendChart"></div>
+    </div>
+  </div>
+
+  <!-- Row 2: Overdue + Open Tickets -->
+  <div class="dash-grid dash-grid-2" style="margin-bottom:1rem">
+    <div class="dash-section">
+      <div class="dash-section-title">Overdue Cleanings <span class="badge badge-danger" id="overdueBadge">0</span></div>
+      <div id="overdueList" class="dash-scroll"></div>
+      <div id="overdueViewAll" style="display:none;text-align:right;padding-top:.4rem"><a href="/admin-analytics" class="btn btn-sm btn-outline" style="font-size:.72rem">View All in Analytics →</a></div>
+    </div>
+    <div class="dash-section">
+      <div class="dash-section-title">Active Tickets <span class="badge badge-warning" id="ticketBadge">0</span></div>
+      <div id="ticketList" class="dash-scroll"></div>
+      <div id="ticketViewAll" style="display:none;text-align:right;padding-top:.4rem"><a href="/admin-tickets" class="btn btn-sm btn-outline" style="font-size:.72rem">View All Tickets →</a></div>
+    </div>
+  </div>
+
+  <!-- Row 3: Worker Performance + Problem Locations -->
+  <div class="dash-grid dash-grid-2" style="margin-bottom:1rem">
+    <div class="dash-section">
+      <div class="dash-section-title">Worker Performance</div>
+      <div id="workerPerf"></div>
+    </div>
+    <div class="dash-section">
+      <div class="dash-section-title">Problem Locations <span class="badge badge-warning" id="problemBadge">0</span></div>
+      <div id="problemList" class="dash-scroll"></div>
+      <div id="problemViewAll" style="display:none;text-align:right;padding-top:.4rem"><a href="/admin-analytics" class="btn btn-sm btn-outline" style="font-size:.72rem">View Analytics →</a></div>
+    </div>
+  </div>
+
+  <!-- Row 4: Today's Work Verification Log -->
+  <div class="dash-section" style="margin-bottom:1rem">
+    <div class="dash-section-title">Today's Cleaning Log <span class="badge badge-info" id="photoBadge">0</span></div>
+    <div id="photoGallery" class="work-log"></div>
+  </div>
+</main>
+
+<!-- Lightbox -->
+<div class="lightbox-overlay" id="lightbox">
+  <button class="lightbox-close" onclick="closeLightbox()">×</button>
+  <button class="lightbox-nav lb-prev" onclick="navLightbox(-1)">‹</button>
+  <button class="lightbox-nav lb-next" onclick="navLightbox(1)">›</button>
+  <img class="lightbox-img" id="lbImg" src="">
+  <div class="lightbox-info" id="lbInfo"></div>
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+if (!App.initAdmin('dashboard')) throw '';
+App.initNotifications(App.apiFetch);
+var esc = App.esc, $ = App.$;
+
+// Skeleton loading
+App.showSkeletonCards('kpiGrid', 6);
+App.showSkeleton('shiftProgress');
+App.showSkeletonCards('roomGrid', 8);
+App.showSkeleton('trendChart');
+App.showSkeletonRows('overdueList');
+App.showSkeletonRows('ticketList');
+App.showSkeleton('workerPerf');
+App.showSkeletonRows('problemList');
+App.showSkeletonCards('photoGallery', 4);
+
+// ── Refresh timestamp ──
+var _lastRefreshTime = null;
+function updateRefreshTime() {
+  _lastRefreshTime = new Date();
+  var el = $('lastRefresh');
+  if (el) el.textContent = 'Updated ' + _lastRefreshTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+}
+function _tickRefresh() {
+  if (!_lastRefreshTime) return;
+  var sec = Math.round((Date.now() - _lastRefreshTime.getTime()) / 1000);
+  var el = $('lastRefresh');
+  if (!el) return;
+  if (sec < 60) el.textContent = 'Updated just now';
+  else if (sec < 300) el.textContent = 'Updated ' + Math.floor(sec / 60) + 'm ago';
+}
+setInterval(_tickRefresh, 30000);
+
+// ── Section error handler ──
+function sectionError(elId, msg) {
+  $(elId).innerHTML = '<div class="dash-error"><span class="dash-error-icon">⚠</span>' + (msg || 'Failed to load') + '</div>';
+}
+
+// ── KPI Cards ──
+async function loadKPIs() {
+  var d = await App.apiFetchJson('/analytics/dashboard');
+  if (!d) { sectionError('kpiGrid', 'Failed to load dashboard data'); return; }
+  function kpi(cls, label, val, sub) {
+    return '<div class="kpi-card ' + cls + '">' +
+      '<div class="kpi-label">' + label + '</div>' +
+      '<div class="kpi-value">' + val + '</div>' +
+      (sub ? '<div class="kpi-sub">' + sub + '</div>' : '') +
+    '</div>';
+  }
+  var cleanedSub = d.todayRecords === 0 && d.yesterdayRecords > 0 ? 'Yesterday: <b>' + d.yesterdayRecords + '</b>' :
+                   d.todayRecords > 0 && d.yesterdayRecords > 0 ? 'Yesterday: <b>' + d.yesterdayRecords + '</b>' :
+                   d.weeklyAvg > 0 ? 'Avg/day: <b>' + d.weeklyAvg + '</b>' : 'No records yet';
+
+  // Completion rate display
+  var compVal = d.completionRate != null ? d.completionRate + '%' : '—';
+  var compSub = d.completionRate != null ? (d.completionRate >= 80 ? 'On track ✓' : d.completionRate >= 50 ? 'Needs attention' : 'Behind schedule') : 'No schedules set';
+
+  // Trend arrows
+  var cleanedTrend = '';
+  if (d.yesterdayRecords > 0) {
+    var diff = d.todayRecords - d.yesterdayRecords;
+    if (diff > 0) cleanedTrend = ' <span class="kpi-trend kpi-trend-up">↑' + diff + '</span>';
+    else if (diff < 0) cleanedTrend = ' <span class="kpi-trend kpi-trend-down">↓' + Math.abs(diff) + '</span>';
+    else cleanedTrend = ' <span class="kpi-trend kpi-trend-flat">→</span>';
+  }
+
+  $('kpiGrid').innerHTML =
+    kpi('kpi-rooms', 'Completion Rate', compVal, compSub) +
+    kpi('kpi-cleaned', 'Cleaned Today', d.todayRecords + cleanedTrend, cleanedSub) +
+    kpi('kpi-tickets', 'Active Tickets', d.openTickets, d.openTickets > 0 ? 'Open + In Progress' : 'All clear') +
+    kpi('kpi-workers', 'Workers', d.activeWorkers, 'Active staff') +
+    kpi('kpi-supervisors', 'Supervisors', d.activeSupervisors, 'Active') +
+    kpi('kpi-records', 'Total Records', d.totalRecords, d.weeklyAvg > 0 ? 'Avg <b>' + d.weeklyAvg + '</b>/day this week' : 'Lifetime');
+
+  // Render shift progress
+  renderShiftProgress(d.shiftProgress);
+}
+
+function renderShiftProgress(sp) {
+  if (!sp) { $('shiftProgressSection').style.display = 'none'; return; }
+  var shifts = ['MORNING', 'AFTERNOON', 'NIGHT', 'GENERAL'];
+  var colors = {MORNING:'sp-morning', AFTERNOON:'sp-afternoon', NIGHT:'sp-night', GENERAL:'sp-general'};
+  var icons = {MORNING:'🌅', AFTERNOON:'☀️', NIGHT:'🌙', GENERAL:'🏠'};
+  var hasAny = shifts.some(function(s) { return sp[s] && sp[s].required > 0; });
+  if (!hasAny) { $('shiftProgressSection').style.display = 'none'; return; }
+  var html = '<div class="sp-grid">';
+  for (var i = 0; i < shifts.length; i++) {
+    var s = shifts[i];
+    var data = sp[s];
+    if (!data || data.required === 0) continue;
+    var pct = Math.round(data.done / data.required * 100);
+    html += '<div class="sp-item">' +
+      '<div class="sp-label"><b>' + icons[s] + ' ' + s.charAt(0) + s.slice(1).toLowerCase() + '</b><span>' + data.done + ' / ' + data.required + ' rooms</span></div>' +
+      '<div class="sp-bar"><div class="sp-fill ' + colors[s] + '" style="width:' + Math.max(pct, pct > 0 ? 8 : 0) + '%"><span class="sp-fill-label">' + pct + '%</span></div></div></div>';
+  }
+  html += '</div>';
+  $('shiftProgress').innerHTML = html;
+}
+
+// ── Room Status Board ──
+async function loadRoomStatus() {
+  var data = await App.apiFetchJson('/analytics/room-status');
+  if (!data) { sectionError('roomGrid', 'Failed to load room status'); return; }
+  if (!data.length) {
+    $('roomGrid').innerHTML = '<div class="dash-empty"><span class="dash-empty-icon">📍</span><div class="dash-empty-text">No rooms found</div><div class="dash-empty-sub">Add locations to see room status</div></div>';
+    return;
+  }
+  var c = {CLEANED:0, PARTIAL:0, NOT_CLEANED:0, NO_SCHEDULE:0};
+  for (var i = 0; i < data.length; i++) c[data[i].status]++;
+  $('roomBadge').textContent = c.CLEANED + '/' + data.length + ' cleaned';
+  $('statusSummary').innerHTML =
+    '<span><b style="color:#16a34a">' + c.CLEANED + '</b> Cleaned</span>' +
+    '<span><b style="color:#f59e0b">' + c.PARTIAL + '</b> Partial</span>' +
+    '<span><b style="color:#ef4444">' + c.NOT_CLEANED + '</b> Pending</span>' +
+    '<span><b style="color:#94a3b8">' + c.NO_SCHEDULE + '</b> No schedule</span>';
+  var cls = {CLEANED:'rs-cleaned', PARTIAL:'rs-partial', NOT_CLEANED:'rs-dirty', NO_SCHEDULE:'rs-nosched'};
+  $('roomGrid').innerHTML = data.map(function(r) {
+    var info = r.lastCleanedAt ? new Date(r.lastCleanedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+    var parent = r.parentName ? r.parentName + ' — ' : '';
+    return '<div class="rs-card ' + cls[r.status] + '" title="' + esc(parent + r.name) + (info ? '\nLast: ' + info : '') + '">' +
+      '<div class="rs-dot"></div><div class="rs-name">' + esc(r.name) + '</div>' +
+      '<div class="rs-meta">' + r.type.replace('_',' ') + (info ? ' · ' + info : '') + '</div></div>';
+  }).join('');
+}
+
+// ── Cleaning Trend (7 days) ──
+async function loadTrend() {
+  var data = await App.apiFetchJson('/analytics/cleaning-trend?days=7');
+  if (!data || !data.trend) { sectionError('trendChart', 'Failed to load trend data'); return; }
+  var trend = data.trend;
+  var hasData = trend.some(function(d) { return d.count > 0; });
+  if (!hasData) {
+    $('trendChart').innerHTML = '<div class="trend-empty"><span class="dash-empty-icon">📊</span><div>No cleaning records in the last 7 days</div><div style="font-size:.72rem;margin-top:.3rem;color:var(--text-light)">Records will appear here once supervisors submit cleaning reports</div></div>';
+    return;
+  }
+  var max = Math.max.apply(null, trend.map(function(d) { return d.count; }).concat([1]));
+  $('trendChart').innerHTML = '<div class="trend-wrap">' + trend.map(function(d) {
+    var pct = Math.max(Math.round(d.count / max * 100), d.count > 0 ? 8 : 2);
+    var dayName = new Date(d.date + 'T12:00:00').toLocaleDateString(undefined, {weekday:'short'});
+    var dayNum = new Date(d.date + 'T12:00:00').getDate();
+    return '<div class="trend-col">' +
+      '<div class="trend-val">' + (d.count > 0 ? d.count : '') + '</div>' +
+      '<div class="trend-fill" style="height:' + pct + '%"></div>' +
+      '<div class="trend-day">' + dayName + '<br>' + dayNum + '</div></div>';
+  }).join('') + '</div>';
+}
+
+// ── Overdue Cleanings (grouped by room) ──
+async function loadOverdue() {
+  var data = await App.apiFetchJson('/analytics/overdue');
+  if (!data) { sectionError('overdueList', 'Failed to load overdue data'); return; }
+  $('overdueBadge').textContent = data.summary.total;
+  if (data.overdue.length === 0) {
+    $('overdueList').innerHTML = '<div class="dash-empty"><span class="dash-empty-icon">✓</span><div class="dash-empty-text">All caught up!</div><div class="dash-empty-sub">No overdue cleanings right now</div></div>';
+    return;
+  }
+  // Group by location
+  var grouped = {};
+  var order = [];
+  for (var i = 0; i < data.overdue.length; i++) {
+    var o = data.overdue[i];
+    var key = o.location.id;
+    if (!grouped[key]) {
+      grouped[key] = { location: o.location, shifts: [], lastCleaningAt: o.lastCleaningAt };
+      order.push(key);
+    }
+    grouped[key].shifts.push(o.missingShift);
+    if (o.lastCleaningAt && (!grouped[key].lastCleaningAt || o.lastCleaningAt > grouped[key].lastCleaningAt))
+      grouped[key].lastCleaningAt = o.lastCleaningAt;
+  }
+  var shiftCls = {MORNING:'shift-morning',AFTERNOON:'shift-afternoon',NIGHT:'shift-night',GENERAL:'shift-general'};
+  var rooms = order.length;
+  var html = '<div style="font-size:.72rem;color:var(--text-muted);margin-bottom:.5rem">' + rooms + ' room' + (rooms > 1 ? 's' : '') + ' with missed shifts</div>';
+  html += '<table class="dash-table"><thead><tr><th>Room</th><th>Missed Shifts</th><th class="hide-mobile">Last</th></tr></thead><tbody>';
+  var shown = Math.min(order.length, 20);
+  for (var i = 0; i < shown; i++) {
+    var g = grouped[order[i]];
+    var parent = g.location.parent ? g.location.parent.name + ' → ' : '';
+    var t = g.lastCleaningAt ? new Date(g.lastCleaningAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—';
+    var badges = '<div class="shift-badges">';
+    for (var j = 0; j < g.shifts.length; j++) {
+      badges += '<span class="shift-badge ' + (shiftCls[g.shifts[j]] || '') + '">' + g.shifts[j] + '</span>';
+    }
+    badges += '</div>';
+    html += '<tr style="cursor:pointer" onclick="location.href=\'/admin-cleaning\'">' +
+      '<td>' + esc(parent + g.location.name) + '</td><td>' + badges + '</td><td class="hide-mobile">' + t + '</td></tr>';
+  }
+  html += '</tbody></table>';
+  if (order.length > shown) html += '<div style="text-align:center;padding:.4rem;font-size:.72rem;color:var(--text-muted)">+ ' + (order.length - shown) + ' more rooms</div>';
+  $('overdueList').innerHTML = html;
+  if (data.summary.total > 0) $('overdueViewAll').style.display = 'block';
+}
+
+// ── Active Tickets (OPEN + IN_PROGRESS) ──
+async function loadTickets() {
+  var data = await App.apiFetchJson('/tickets?status=OPEN,IN_PROGRESS&limit=10');
+  if (!data) { sectionError('ticketList', 'Failed to load tickets'); return; }
+  $('ticketBadge').textContent = data.total;
+  if (data.tickets.length === 0) {
+    $('ticketList').innerHTML = '<div class="dash-empty"><span class="dash-empty-icon">✓</span><div class="dash-empty-text">No active tickets</div><div class="dash-empty-sub">All issues are resolved</div></div>';
+    return;
+  }
+  var prCls = {URGENT:'badge-urgent',HIGH:'badge-high',NORMAL:'badge-normal',LOW:'badge-low'};
+  var stCls = {OPEN:'badge-open',IN_PROGRESS:'badge-in_progress'};
+  var html = '<table class="dash-table"><thead><tr><th>Title</th><th>Priority</th><th class="hide-mobile">Status</th></tr></thead><tbody>';
+  for (var i = 0; i < data.tickets.length; i++) {
+    var t = data.tickets[i];
+    html += '<tr style="cursor:pointer" onclick="location.href=\'/admin-tickets\'">' +
+      '<td>' + esc(t.title) + '<br><span style="font-size:.68rem;color:var(--text-muted)">' + esc(t.location.name) + '</span></td>' +
+      '<td><span class="badge ' + (prCls[t.priority] || '') + '">' + t.priority + '</span></td>' +
+      '<td class="hide-mobile"><span class="badge ' + (stCls[t.status] || '') + '">' + t.status.replace('_',' ') + '</span></td></tr>';
+  }
+  html += '</tbody></table>';
+  if (data.total > 10) html += '<div style="text-align:center;padding:.4rem;font-size:.72rem;color:var(--text-muted)">Showing 10 of ' + data.total + ' tickets</div>';
+  $('ticketList').innerHTML = html;
+  if (data.total > 0) $('ticketViewAll').style.display = 'block';
+}
+
+// ── Worker Performance (scored, richer data) ──
+async function loadWorkerPerf() {
+  var data = await App.apiFetchJson('/analytics/workers');
+  if (!data || !data.length) {
+    $('workerPerf').innerHTML = '<div class="dash-empty"><span class="dash-empty-icon">👷</span><div class="dash-empty-text">No workers yet</div><div class="dash-empty-sub"><a href="/admin-workers" style="color:var(--primary)">Add workers →</a></div></div>';
+    return;
+  }
+  var workers = data.slice(0, 10);
+  var maxRec = Math.max.apply(null, workers.map(function(w) { return w.cleaningCount; }).concat([1]));
+  var html = '<div style="font-size:.68rem;color:var(--text-muted);margin-bottom:.5rem">Ranked by performance score</div><div class="perf-bars">';
+  for (var i = 0; i < workers.length; i++) {
+    var w = workers[i];
+    var pct = w.cleaningCount > 0 ? Math.max(Math.round(w.cleaningCount / maxRec * 100), 5) : 0;
+    var flagPct = w.cleaningCount > 0 ? Math.round(w.flaggedCount / w.cleaningCount * 100) : 0;
+    var meta = w.cleaningCount + ' cleaned';
+    if (w.flaggedCount > 0) meta += ' · <span style="color:#ef4444">' + w.flaggedCount + ' flagged (' + flagPct + '%)</span>';
+    if (w.locationTicketCount > 0) meta += ' · ' + w.locationTicketCount + ' ticket' + (w.locationTicketCount > 1 ? 's' : '');
+    html += '<div class="perf-row" style="cursor:pointer" onclick="location.href=\'/admin-workers\'">' +
+      '<div class="perf-name" title="' + esc(w.name) + '">' + esc(w.name) + '</div>' +
+      '<div class="perf-bar-wrap">';
+    if (pct > 0) {
+      html += '<div class="perf-bar-fill" style="width:' + pct + '%"><span class="perf-bar-label">' + meta + '</span></div>';
+    } else {
+      html += '<div style="font-size:.68rem;color:var(--text-light);padding:.2rem .5rem">No records yet</div>';
+    }
+    html += '</div></div>';
+  }
+  html += '</div>';
+  if (data.length > 10) html += '<div style="text-align:center;padding:.3rem;font-size:.72rem"><a href="/admin-workers" style="color:var(--primary)">View all ' + data.length + ' workers →</a></div>';
+  $('workerPerf').innerHTML = html;
+}
+
+// ── Problem Locations (severity labels) ──
+async function loadProblems() {
+  var data = await App.apiFetchJson('/analytics/problem-locations?days=7');
+  if (!data) { sectionError('problemList', 'Failed to load problem locations'); return; }
+  $('problemBadge').textContent = data.locations.length;
+  if (data.locations.length === 0) {
+    $('problemList').innerHTML = '<div class="dash-empty"><span class="dash-empty-icon">✓</span><div class="dash-empty-text">No problem areas</div><div class="dash-empty-sub">All locations performing well</div></div>';
+    return;
+  }
+  function getSeverity(score) {
+    if (score >= 25) return {label:'Critical',cls:'severity-critical'};
+    if (score >= 15) return {label:'High',cls:'severity-high'};
+    if (score >= 5) return {label:'Medium',cls:'severity-medium'};
+    return {label:'Low',cls:'severity-low'};
+  }
+  var html = '<table class="dash-table"><thead><tr><th>Location</th><th>Severity</th><th>Issues</th></tr></thead><tbody>';
+  var shown = Math.min(data.locations.length, 10);
+  for (var i = 0; i < shown; i++) {
+    var p = data.locations[i];
+    var sev = getSeverity(p.score);
+    var parent = p.location.parent ? p.location.parent.name + ' → ' : '';
+    var issues = [];
+    if (p.overdueShifts > 0) issues.push(p.overdueShifts + ' overdue');
+    if (p.flaggedCount > 0) issues.push(p.flaggedCount + ' flagged');
+    if (p.ticketCount > 0) issues.push(p.ticketCount + ' ticket' + (p.ticketCount > 1 ? 's' : ''));
+    html += '<tr style="cursor:pointer" onclick="location.href=\'/admin-cleaning\'">' +
+      '<td>' + esc(parent + p.location.name) + '</td>' +
+      '<td><span class="severity ' + sev.cls + '">' + sev.label + '</span></td>' +
+      '<td style="font-size:.72rem">' + issues.join(', ') + '</td></tr>';
+  }
+  html += '</tbody></table>';
+  if (data.locations.length > shown) html += '<div style="text-align:center;padding:.4rem;font-size:.72rem;color:var(--text-muted)">+ ' + (data.locations.length - shown) + ' more</div>';
+  $('problemList').innerHTML = html;
+  if (data.locations.length > 0) $('problemViewAll').style.display = 'block';
+}
+
+// ── Today's Cleaning Log (full work verification) ──
+var allLbImages = []; // {url, room, shift, supervisor, time}
+var lbIndex = 0;
+
+function openLightbox(idx) {
+  lbIndex = idx;
+  var img = allLbImages[idx];
+  if (!img) return;
+  $('lbImg').src = img.url;
+  $('lbInfo').textContent = img.room + ' · ' + img.shift + ' · ' + img.supervisor + ' · ' + img.time;
+  $('lightbox').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox() {
+  $('lightbox').classList.remove('active');
+  document.body.style.overflow = '';
+}
+function navLightbox(dir) {
+  lbIndex = (lbIndex + dir + allLbImages.length) % allLbImages.length;
+  var img = allLbImages[lbIndex];
+  $('lbImg').src = img.url;
+  $('lbInfo').textContent = img.room + ' · ' + img.shift + ' · ' + img.supervisor + ' · ' + img.time;
+}
+// Close on overlay click or Escape key
+$('lightbox').addEventListener('click', function(e) { if (e.target === this) closeLightbox(); });
+document.addEventListener('keydown', function(e) {
+  if (!$('lightbox').classList.contains('active')) return;
+  if (e.key === 'Escape') closeLightbox();
+  if (e.key === 'ArrowLeft') navLightbox(-1);
+  if (e.key === 'ArrowRight') navLightbox(1);
+});
+
+async function loadPhotos() {
+  var todayISO = new Date().toISOString().split('T')[0];
+  var data = await App.apiFetchJson('/cleaning-records?from=' + todayISO + '&limit=100');
+  if (!data) return;
+  var records = data.records || [];
+  // Only records with images
+  var withPhotos = records.filter(function(r) { return r.images && r.images.length > 0; });
+  $('photoBadge').textContent = withPhotos.length + ' record' + (withPhotos.length !== 1 ? 's' : '');
+  if (withPhotos.length === 0) {
+    $('photoGallery').innerHTML = '<div class="dash-empty"><span class="dash-empty-icon">📷</span><div class="dash-empty-text">No cleaning records with photos today</div><div class="dash-empty-sub">Photos appear here when supervisors submit cleaning records</div></div>';
+    return;
+  }
+  allLbImages = [];
+  var shiftCls = {MORNING:'shift-morning',AFTERNOON:'shift-afternoon',NIGHT:'shift-night',GENERAL:'shift-general'};
+  var statusCls = {SUBMITTED:'wl-status-submitted',FLAGGED:'wl-status-flagged'};
+  var html = '';
+  for (var i = 0; i < withPhotos.length; i++) {
+    var rec = withPhotos[i];
+    var room = rec.location ? rec.location.name : '—';
+    var sup = rec.supervisor ? rec.supervisor.name : '—';
+    var shift = rec.shift || 'GENERAL';
+    var time = new Date(rec.cleanedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    var workers = rec.workers ? rec.workers.map(function(w) { return w.name; }).join(', ') : '—';
+    var flagged = rec.status === 'FLAGGED';
+
+    html += '<div class="wl-card' + (flagged ? ' wl-flagged' : '') + '">';
+    // Header: room name + shift badge + status
+    html += '<div class="wl-header"><div>' +
+      '<span class="wl-room">' + esc(room) + '</span> ' +
+      '<span class="shift-badge ' + (shiftCls[shift] || '') + '">' + shift + '</span>' +
+      '</div><span class="wl-status ' + (statusCls[rec.status] || statusCls.SUBMITTED) + '">' + (rec.status || 'SUBMITTED') + '</span></div>';
+    // Meta row
+    html += '<div class="wl-meta">' +
+      '<span class="wl-meta-item">🕐 <b>' + time + '</b></span>' +
+      '<span class="wl-meta-item">👤 ' + esc(sup) + '</span>' +
+      '<span class="wl-meta-item">🧹 ' + esc(workers) + '</span>' +
+      '<span class="wl-meta-item">📷 ' + rec.images.length + ' photo' + (rec.images.length > 1 ? 's' : '') + '</span>' +
+    '</div>';
+    // Photos
+    html += '<div class="wl-photos">';
+    for (var j = 0; j < rec.images.length; j++) {
+      var imgIdx = allLbImages.length;
+      var imgSrc = App.imgUrl(rec.images[j].imageUrl);
+      allLbImages.push({url: imgSrc, room: room, shift: shift, supervisor: sup, time: time});
+      html += '<div class="wl-thumb" onclick="openLightbox(' + imgIdx + ')"><img src="' + esc(imgSrc) + '" alt="Cleaning" loading="lazy"></div>';
+    }
+    html += '</div>';
+    // Notes
+    if (rec.notes) {
+      html += '<div class="wl-notes">"' + esc(rec.notes) + '"</div>';
+    }
+    html += '</div>';
+  }
+  $('photoGallery').innerHTML = html;
+}
+
+// ── Load everything in parallel ──
+var _abortController = null;
+function loadAll() {
+  if (_abortController) _abortController.abort();
+  _abortController = new AbortController();
+  return Promise.all([loadKPIs(), loadRoomStatus(), loadTrend(), loadOverdue(), loadTickets(), loadWorkerPerf(), loadProblems(), loadPhotos()]).then(function() {
+    updateRefreshTime();
+    _abortController = null;
+  }).catch(function() { _abortController = null; });
+}
+function manualRefresh() {
+  var btn = $('refreshBtn');
+  if (btn) btn.classList.add('refreshing');
+  loadAll().finally(function() { if (btn) btn.classList.remove('refreshing'); });
+}
+loadAll();
+
+// ── Auto-refresh every 5 minutes ──
+var _refreshInterval = setInterval(function() {
+  loadAll();
+}, 5 * 60 * 1000);
+</script>
+</body>
+</html>

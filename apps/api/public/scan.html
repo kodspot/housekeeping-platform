@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="manifest" href="/site.webmanifest">
+<title>Housekeeping — Scan</title>
+<link rel="stylesheet" href="/css/design-system.css">
+<style>
+body{background:var(--bg);min-height:100dvh}
+.scan-wrap{max-width:480px;margin:0 auto;padding:1.5rem 1rem}
+.scan-header{text-align:center;margin-bottom:1.5rem}
+.scan-logo{font-size:1.3rem;font-weight:700;color:var(--primary);letter-spacing:-.02em}
+.scan-loc{margin-top:.75rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1rem}
+.scan-loc-name{font-size:1.1rem;font-weight:700;color:var(--text)}
+.scan-loc-meta{font-size:.78rem;color:var(--text-muted);margin-top:.15rem}
+.scan-loc-org{font-size:.72rem;color:var(--text-light);margin-top:.35rem}
+.scan-divider{display:flex;align-items:center;gap:.75rem;margin:1.5rem 0;color:var(--text-muted);font-size:.75rem}
+.scan-divider::before,.scan-divider::after{content:'';flex:1;height:1px;background:var(--border)}
+.role-cards{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1.5rem}
+.role-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem 1rem;text-align:center;cursor:pointer;transition:all .15s}
+.role-card:hover{border-color:var(--primary);box-shadow:0 2px 8px rgba(14,165,164,.1)}
+.role-card.active{border-color:var(--primary);background:rgba(14,165,164,.04)}
+.role-icon{font-size:1.6rem;margin-bottom:.35rem;display:block}
+.role-label{font-size:.85rem;font-weight:600;color:var(--text)}
+.role-desc{font-size:.68rem;color:var(--text-muted);margin-top:.15rem}
+
+/* Complaint form */
+.complaint-form{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem}
+.complaint-form h3{font-size:1rem;font-weight:600;margin-bottom:.75rem;color:var(--text)}
+.issue-grid{display:grid;grid-template-columns:1fr 1fr;gap:.4rem}
+.issue-opt{border:1px solid var(--border);border-radius:var(--radius);padding:.5rem .6rem;cursor:pointer;text-align:center;transition:all .15s;font-size:.78rem;font-weight:500;color:var(--text);background:var(--bg);min-height:var(--touch-min)}
+.issue-opt:hover{border-color:var(--primary)}
+.issue-opt.selected{border-color:var(--primary);background:rgba(14,165,164,.06);color:var(--primary);font-weight:600}
+.issue-opt .io-icon{display:block;font-size:1.1rem;margin-bottom:.15rem}
+.photo-upload{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+.photo-upload label{display:flex;align-items:center;gap:.4rem;padding:.45rem .75rem;border:1px dashed var(--border);border-radius:var(--radius);cursor:pointer;font-size:.78rem;color:var(--text-muted);transition:border-color .15s;min-height:var(--touch-min)}
+.photo-upload label:hover{border-color:var(--primary);color:var(--primary)}
+.photo-preview{width:48px;height:48px;border-radius:var(--radius-sm);object-fit:cover;border:1px solid var(--border);display:none}
+
+/* States */
+.scan-loading,.scan-error,.scan-success{text-align:center;padding:3rem 1rem}
+.scan-loading{color:var(--text-muted);font-size:.9rem}
+.scan-error{color:var(--danger)}
+.scan-error-icon{font-size:2rem;margin-bottom:.5rem;display:block}
+.scan-error-text{font-size:.95rem;font-weight:600}
+.scan-error-sub{font-size:.82rem;color:var(--text-muted);margin-top:.3rem}
+.scan-success{color:var(--success)}
+.success-icon{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:50%;background:#f0fdf4;margin-bottom:.75rem}
+.success-icon svg{width:28px;height:28px;stroke:#16a34a;stroke-width:2.5;fill:none}
+.success-title{font-size:1.1rem;font-weight:700;color:var(--text)}
+.success-sub{font-size:.82rem;color:var(--text-muted);margin-top:.3rem}
+.success-id{font-size:.72rem;color:var(--text-light);margin-top:.5rem;font-family:monospace}
+
+@media(max-width:480px){
+  .scan-wrap{padding:1rem .75rem}
+  .complaint-form{padding:1rem}
+  .issue-grid{gap:.3rem}
+  .issue-opt{padding:.4rem .5rem;font-size:.72rem}
+}
+</style>
+</head>
+<body>
+<div class="scan-wrap" id="root">
+  <div class="scan-loading" id="loadingState">
+    <div class="skeleton" style="width:80%;height:1.2rem;margin:0 auto .5rem"></div>
+    <div class="skeleton" style="width:60%;height:.9rem;margin:0 auto"></div>
+    <div style="margin-top:.3rem;font-size:.82rem;color:var(--text-light)">Looking up location…</div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var root = document.getElementById('root');
+
+  // Extract QR code from URL: /scan/ABC123
+  var pathParts = location.pathname.split('/');
+  var scanIdx = pathParts.indexOf('scan');
+  var qrCode = scanIdx >= 0 && pathParts[scanIdx + 1] ? pathParts[scanIdx + 1].trim() : '';
+
+  if (!qrCode) {
+    showError('Invalid QR Code', 'This link does not contain a valid room code. Please scan the QR code again.');
+    return;
+  }
+
+  // Check if supervisor is logged in
+  var supToken = null;
+  try { supToken = sessionStorage.getItem('sup_token'); } catch(e) {}
+
+  if (supToken) {
+    // Supervisor: redirect to cleaning flow
+    location.href = '/supervisor-clean?qr=' + encodeURIComponent(qrCode);
+    return;
+  }
+
+  // Guest user: fetch location info and show complaint form
+  loadLocation(qrCode);
+
+  async function loadLocation(code) {
+    try {
+      var res = await fetch('/public/location/' + encodeURIComponent(code));
+      if (!res.ok) {
+        var err = await res.json().catch(function() { return {}; });
+        if (res.status === 404) {
+          showError('Location Not Found', 'This QR code is not linked to any active room. Please contact the front desk.');
+        } else if (res.status === 410) {
+          showError('Unavailable', err.error || 'This facility is not currently accepting feedback.');
+        } else {
+          showError('Error', err.error || 'Something went wrong. Please try again.');
+        }
+        return;
+      }
+      var loc = await res.json();
+      showComplaintForm(loc, code);
+    } catch(e) {
+      showError('Connection Error', 'Could not connect to the server. Please check your internet and try again.');
+    }
+  }
+
+  function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  function showError(title, sub) {
+    root.innerHTML =
+      '<div class="scan-header"><div class="scan-logo">🏥 Housekeeping</div></div>' +
+      '<div class="scan-error"><span class="scan-error-icon">⚠️</span>' +
+      '<div class="scan-error-text">' + esc(title) + '</div>' +
+      '<div class="scan-error-sub">' + esc(sub) + '</div></div>';
+  }
+
+  function showComplaintForm(loc, code) {
+    var parentInfo = loc.parentName ? esc(loc.parentName) + ' → ' + esc(loc.name) : esc(loc.name);
+    var typeLabel = loc.type.replace(/_/g, ' ');
+
+    var ISSUES = [
+      { key: 'NOT_CLEAN', icon: '🧹', label: 'Not Clean' },
+      { key: 'BAD_SMELL', icon: '👃', label: 'Bad Smell' },
+      { key: 'BROKEN_EQUIPMENT', icon: '🔧', label: 'Broken Item' },
+      { key: 'WATER_ISSUE', icon: '🚿', label: 'Water Issue' },
+      { key: 'PEST', icon: '🐛', label: 'Pest Problem' },
+      { key: 'LINEN', icon: '🛏️', label: 'Linen Issue' },
+      { key: 'WASTE', icon: '🗑️', label: 'Waste Issue' },
+      { key: 'OTHER', icon: '📋', label: 'Other' }
+    ];
+
+    root.innerHTML =
+      '<div class="scan-header">' +
+        '<div class="scan-logo">🏥 Housekeeping</div>' +
+        '<div class="scan-loc">' +
+          '<div class="scan-loc-name">' + parentInfo + '</div>' +
+          '<div class="scan-loc-meta">' + typeLabel + '</div>' +
+          '<div class="scan-loc-org">' + esc(loc.orgName) + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="complaint-form">' +
+        '<h3>Report an Issue</h3>' +
+        '<p style="font-size:.8rem;color:var(--text-muted);margin-bottom:1rem">Select the type of issue you want to report. Our housekeeping team will be notified immediately.</p>' +
+        '<div class="form-group">' +
+          '<div class="form-label">What\'s the problem? <span style="color:var(--danger)">*</span></div>' +
+          '<div class="issue-grid" id="issueGrid">' +
+            ISSUES.map(function(i) {
+              return '<div class="issue-opt" data-issue="' + i.key + '"><span class="io-icon">' + i.icon + '</span>' + i.label + '</div>';
+            }).join('') +
+          '</div>' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label class="form-label">Description <span class="optional">(optional)</span></label>' +
+          '<textarea class="form-textarea" id="descField" placeholder="Any additional details…" maxlength="500"></textarea>' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label class="form-label">Photo <span class="optional">(optional)</span></label>' +
+          '<div class="photo-upload">' +
+            '<label for="photoInput">📷 Attach photo</label>' +
+            '<input type="file" id="photoInput" accept="image/jpeg,image/png,image/webp" style="display:none">' +
+            '<img id="photoPreview" class="photo-preview">' +
+            '<span id="photoName" style="font-size:.72rem;color:var(--text-muted)"></span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="scan-divider">Your info (optional)</div>' +
+        '<div class="form-group">' +
+          '<label class="form-label">Name <span class="optional">(optional)</span></label>' +
+          '<input type="text" class="form-input" id="nameField" placeholder="Your name" maxlength="100">' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label class="form-label">Phone <span class="optional">(optional)</span></label>' +
+          '<input type="tel" class="form-input" id="phoneField" placeholder="Phone number" maxlength="20">' +
+          '<div class="form-hint">So we can follow up if needed</div>' +
+        '</div>' +
+        '<button class="btn btn-primary" id="submitBtn" style="width:100%" disabled>Select an issue to submit</button>' +
+        '<div id="formError" style="color:var(--danger);font-size:.78rem;text-align:center;margin-top:.5rem;display:none"></div>' +
+      '</div>';
+
+    // Wire up issue selection
+    var selectedIssue = null;
+    var grid = document.getElementById('issueGrid');
+    var submitBtn = document.getElementById('submitBtn');
+    grid.addEventListener('click', function(e) {
+      var opt = e.target.closest('.issue-opt');
+      if (!opt) return;
+      var prev = grid.querySelector('.selected');
+      if (prev) prev.classList.remove('selected');
+      opt.classList.add('selected');
+      selectedIssue = opt.dataset.issue;
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Submit Complaint';
+    });
+
+    // Photo preview
+    var photoInput = document.getElementById('photoInput');
+    var photoPreview = document.getElementById('photoPreview');
+    var photoName = document.getElementById('photoName');
+    photoInput.addEventListener('change', function() {
+      if (photoInput.files && photoInput.files[0]) {
+        var file = photoInput.files[0];
+        if (file.size > 5 * 1024 * 1024) {
+          photoName.textContent = 'Too large (max 5MB)';
+          photoName.style.color = 'var(--danger)';
+          photoInput.value = '';
+          return;
+        }
+        photoPreview.src = URL.createObjectURL(file);
+        photoPreview.style.display = 'block';
+        photoName.textContent = file.name;
+        photoName.style.color = 'var(--text-muted)';
+      }
+    });
+
+    // Submit
+    submitBtn.addEventListener('click', async function() {
+      if (!selectedIssue) return;
+      var errEl = document.getElementById('formError');
+      errEl.style.display = 'none';
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting…';
+
+      try {
+        var form = new FormData();
+        form.append('locationId', loc.id);
+        form.append('issueType', selectedIssue);
+        var desc = document.getElementById('descField').value.trim();
+        if (desc) form.append('description', desc);
+        var name = document.getElementById('nameField').value.trim();
+        if (name) form.append('guestName', name);
+        var phone = document.getElementById('phoneField').value.trim();
+        if (phone) form.append('guestPhone', phone);
+        if (photoInput.files && photoInput.files[0]) {
+          form.append('image', photoInput.files[0]);
+        }
+
+        var res = await fetch('/public/complaint', { method: 'POST', body: form });
+        var result = await res.json();
+
+        if (!res.ok) {
+          throw new Error(result.error || 'Failed to submit');
+        }
+
+        showSuccess(result.ticket);
+      } catch(e) {
+        errEl.textContent = e.message || 'Something went wrong. Please try again.';
+        errEl.style.display = 'block';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Complaint';
+      }
+    });
+  }
+
+  function showSuccess(ticket) {
+    root.innerHTML =
+      '<div class="scan-header"><div class="scan-logo">🏥 Housekeeping</div></div>' +
+      '<div class="scan-success">' +
+        '<div class="success-icon"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>' +
+        '<div class="success-title">Complaint Submitted!</div>' +
+        '<div class="success-sub">Thank you for reporting. Our housekeeping team has been notified and will address this as soon as possible.</div>' +
+        '<div class="success-id">Reference: ' + esc(ticket.id.substring(0, 8).toUpperCase()) + '</div>' +
+        '<div style="margin-top:1.5rem"><button class="btn btn-outline" onclick="location.reload()">Report Another Issue</button></div>' +
+      '</div>';
+  }
+})();
+</script>
+</body>
+</html>

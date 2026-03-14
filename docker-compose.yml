@@ -1,0 +1,109 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: housekeeping-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 400M
+        reservations:
+          memory: 100M
+    networks:
+      - app-network
+
+  api:
+    build: ./apps/api
+    container_name: housekeeping-api
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/node_modules/.cache
+    volumes:
+      - app-logs:/data/logs
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - PORT=${PORT:-3000}
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - COOKIE_SECRET=${COOKIE_SECRET}
+      - ADMIN_KEY=${ADMIN_KEY}
+      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
+      - R2_BUCKET_NAME=${R2_BUCKET_NAME}
+      - APP_URL=${APP_URL}
+      - COOKIE_DOMAIN=${COOKIE_DOMAIN:-}
+      - CORS_ORIGINS=${CORS_ORIGINS:-}
+      - SES_SMTP_HOST=${SES_SMTP_HOST:-}
+      - SES_SMTP_USER=${SES_SMTP_USER:-}
+      - SES_SMTP_PASS=${SES_SMTP_PASS:-}
+      - SES_FROM_EMAIL=${SES_FROM_EMAIL:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 400M
+        reservations:
+          memory: 100M
+    networks:
+      - app-network
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: housekeeping-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./infrastructure/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+    networks:
+      - app-network
+
+volumes:
+  postgres-data:
+  caddy-data:
+  caddy-config:
+  app-logs:
+
+networks:
+  app-network:
+    driver: bridge

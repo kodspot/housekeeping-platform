@@ -1,0 +1,25 @@
+# Environment variables (NEVER commit secrets)
+.env
+.env.local
+.env.production
+
+# Data volumes (postgres, caddy, logs)
+data/
+
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Prisma generated
+apps/api/node_modules/.prisma/

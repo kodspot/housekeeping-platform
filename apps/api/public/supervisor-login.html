@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="manifest" href="/site.webmanifest">
+<title>Supervisor Login — Housekeeping</title>
+<link rel="stylesheet" href="/css/design-system.css">
+</head>
+<body class="auth-layout" data-theme="dark">
+<div class="auth-card" style="max-width:380px">
+  <h1 class="auth-title text-center">Housekeeping</h1>
+  <p class="auth-subtitle text-center">Supervisor Login</p>
+  <form id="loginForm">
+    <div class="form-group">
+      <label class="form-label" for="email">Email</label>
+      <input class="form-input" type="email" id="email" required autocomplete="email" inputmode="email">
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="password">Password</label>
+      <input class="form-input" type="password" id="password" required autocomplete="current-password">
+    </div>
+    <button type="submit" class="btn btn-primary btn-block btn-lg" id="submitBtn">Sign In</button>
+    <div id="error" class="error-msg mt-sm text-center"></div>
+  </form>
+</div>
+<script src="/js/app.js"></script>
+<script>
+if (sessionStorage.getItem('sup_token')) location.href = '/supervisor-scan';
+document.getElementById('loginForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  var btn = document.getElementById('submitBtn'); btn.disabled = true; btn.textContent = 'Signing in…';
+  document.getElementById('error').style.display = 'none';
+  try {
+    var res = await fetch('/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: document.getElementById('email').value.trim(), password: document.getElementById('password').value }) });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Login failed');
+    if (data.user.role !== 'SUPERVISOR') {
+      document.getElementById('error').textContent = 'Access restricted to supervisors';
+      document.getElementById('error').style.display = 'block'; btn.disabled = false; btn.textContent = 'Sign In'; return;
+    }
+    sessionStorage.setItem('sup_token', data.token);
+    sessionStorage.setItem('sup_user', JSON.stringify({ id: data.user.id, name: data.user.name, orgId: data.user.orgId }));
+    location.href = '/supervisor-scan';
+  } catch (err) {
+    document.getElementById('error').textContent = err.message;
+    document.getElementById('error').style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Sign In';
+  }
+});
+</script>
+</body>
+</html>

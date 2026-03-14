@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="manifest" href="/site.webmanifest">
+<title>Cleaning Records — Housekeeping Admin</title>
+<link rel="stylesheet" href="/css/design-system.css">
+<style>
+/* ── Summary bar ── */
+.cr-summary{display:flex;gap:1rem;flex-wrap:wrap;padding:.6rem 0 .5rem;border-bottom:1px solid var(--border-light);margin-bottom:.75rem}
+.cr-summary-item{font-size:.78rem;color:var(--text-muted)}
+.cr-summary-item b{color:var(--text);font-weight:700}
+.cr-summary-item .cr-flagged{color:var(--danger)}
+.cr-summary-item .cr-late{color:var(--warning-text)}
+
+/* ── Filter bar ── */
+.cr-filters{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:.75rem}
+.cr-filters .form-input,.cr-filters .form-select{font-size:.82rem;height:36px}
+.cr-filters .cs-trigger{font-size:.82rem;height:36px;min-height:36px}
+.cr-search{min-width:160px;max-width:220px;flex:1}
+.cr-filter-sel{min-width:120px;max-width:160px}
+.cr-date-input{max-width:150px}
+.cr-filter-row{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;width:100%}
+
+/* ── Table enhancements ── */
+.cr-tbl{width:100%;border-collapse:collapse;font-size:.84rem}
+.cr-tbl thead th{text-align:left;padding:.55rem .65rem;color:var(--text-muted);border-bottom:2px solid var(--border);font-weight:600;font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;position:sticky;top:0;background:var(--surface);z-index:1}
+.cr-tbl tbody td{padding:.55rem .65rem;border-bottom:1px solid var(--border-light);vertical-align:middle}
+.cr-tbl tbody tr:nth-child(even) td{background:rgba(248,250,252,.5)}
+.cr-tbl tbody tr:hover td{background:rgba(14,165,164,.04)}
+.cr-tbl td:last-child{white-space:nowrap}
+.cr-row-flagged td{background:rgba(225,29,72,.03)!important}
+.cr-loc-cell{font-weight:600}
+.cr-loc-type{font-size:.68rem;color:var(--text-muted);font-weight:400;display:block;margin-top:1px}
+.cr-supervisor{font-size:.8rem;color:var(--text-muted)}
+.cr-workers{font-size:.8rem;color:var(--text-muted)}
+.cr-photos{font-weight:600;color:var(--primary)}
+.cr-date{font-size:.75rem;color:var(--text-muted)}
+.cr-actions{display:flex;gap:4px;flex-wrap:wrap}
+
+/* ── Detail modal grid ── */
+.cr-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem .75rem}
+.cr-detail-item{padding:.35rem 0}
+.cr-detail-label{font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:1px}
+.cr-detail-val{font-size:.88rem;font-weight:500;word-break:break-word}
+.cr-detail-full{grid-column:1/-1}
+
+/* ── Photo gallery ── */
+.cr-gallery{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem}
+.cr-gallery-img{width:120px;height:90px;object-fit:cover;border-radius:var(--radius-sm);cursor:pointer;border:1px solid var(--border-light);transition:transform .15s,box-shadow .15s}
+.cr-gallery-img:hover{transform:scale(1.03);box-shadow:var(--shadow-md)}
+
+/* ── Lightbox ── */
+.cr-lightbox{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.88);z-index:var(--z-lightbox);display:none;align-items:center;justify-content:center;cursor:pointer}
+.cr-lightbox.active{display:flex}
+.cr-lightbox img{max-width:92vw;max-height:90vh;border-radius:var(--radius);box-shadow:var(--shadow-xl)}
+.cr-lightbox-close{position:absolute;top:16px;right:20px;color:#fff;font-size:2rem;cursor:pointer;background:none;border:none;line-height:1}
+
+/* ── Flag alert ── */
+.cr-flag-alert{background:var(--danger-bg);padding:.5rem .65rem;border-radius:var(--radius-sm);font-size:.82rem;color:var(--danger-text);margin-top:.5rem}
+.cr-late-alert{background:var(--warning-bg);padding:.5rem .65rem;border-radius:var(--radius-sm);font-size:.82rem;color:var(--warning-text);margin-top:.5rem}
+
+/* ── Pagination ── */
+.cr-pager{display:flex;gap:.35rem;justify-content:center;align-items:center;padding:.75rem 0}
+.cr-pager button{padding:.3rem .6rem;font-size:.78rem;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);cursor:pointer;min-height:32px;transition:all .15s}
+.cr-pager button:hover{border-color:var(--primary);color:var(--primary)}
+.cr-pager button.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.cr-pager button:disabled{opacity:.4;cursor:default}
+.cr-pager-info{font-size:.75rem;color:var(--text-muted);margin:0 .5rem}
+
+/* ── Responsive: phones ≤640px ── */
+@media(max-width:640px){
+  .cr-search{min-width:100%;max-width:100%}
+  .cr-filter-sel,.cr-date-input{flex:1 1 45%}
+  .cr-tbl thead{display:none}
+  .cr-tbl tbody tr{display:block;padding:.75rem;margin-bottom:.5rem;border:1px solid var(--border-light);border-radius:var(--radius);background:var(--surface)}
+  .cr-tbl tbody tr:nth-child(even){background:var(--surface)}
+  .cr-tbl tbody td{display:flex;justify-content:space-between;align-items:center;padding:.25rem 0;border:none;font-size:.82rem}
+  .cr-tbl tbody td::before{content:attr(data-label);font-weight:600;font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em;flex-shrink:0;margin-right:.5rem}
+  .cr-tbl tbody td:first-child{padding-top:0}
+  .cr-tbl tbody td:last-child{padding-top:.35rem;justify-content:flex-start}
+  .cr-tbl tbody td:last-child::before{display:none}
+  .cr-actions{width:100%}
+  .cr-loc-type{display:inline;margin-top:0;margin-left:.25rem}
+  .cr-detail-grid{grid-template-columns:1fr}
+  .cr-gallery-img{width:90px;height:68px}
+}
+
+/* ── Tablets ≤768px ── */
+@media(max-width:768px){
+  .cr-detail-grid{grid-template-columns:1fr 1fr}
+}
+
+/* ── Split screen 769–960px ── */
+@media(min-width:769px) and (max-width:960px){
+  .cr-tbl{font-size:.78rem}
+  .cr-tbl thead th,.cr-tbl tbody td{padding:.4rem .45rem}
+  .cr-actions .btn-sm{font-size:.7rem;padding:.15rem .3rem}
+  .cr-search{max-width:170px}
+}
+
+/* ── Desktop 1280px+ ── */
+@media(min-width:1280px){
+  .cr-tbl{font-size:.86rem}
+}
+
+/* ── Small phones ≤380px ── */
+@media(max-width:380px){
+  .cr-summary{flex-direction:column;gap:.25rem}
+  .cr-pager button{padding:.2rem .4rem;font-size:.72rem;min-height:28px}
+}
+
+/* ── Reduced motion ── */
+@media(prefers-reduced-motion:reduce){
+  *{transition:none!important}
+}
+</style>
+</head>
+<body>
+<nav class="topbar">
+  <div class="topbar-left">
+    <button class="nav-toggle" id="nav-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg></button>
+    <span class="topbar-brand">Housekeeping</span>
+    <div class="topbar-nav" id="topbar-nav"></div>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-user" id="userName"></span>
+    <button class="btn btn-sm btn-ghost" onclick="App.logout()">Logout</button>
+  </div>
+</nav>
+<div class="sa-banner" id="sa-banner"></div>
+
+<main class="container">
+  <div class="toolbar">
+    <h2 class="toolbar-title">Cleaning Records</h2>
+  </div>
+
+  <div id="summaryBar"></div>
+
+  <div class="cr-filters">
+    <input class="form-input cr-search" type="search" id="searchInput" placeholder="Search location…" oninput="debounceSearch()">
+    <select class="form-select cr-filter-sel" id="filterLocation" onchange="loadRecords(1)">
+      <option value="">All Locations</option>
+    </select>
+    <select class="form-select cr-filter-sel" id="filterSupervisor" onchange="loadRecords(1)">
+      <option value="">All Supervisors</option>
+    </select>
+    <select class="form-select cr-filter-sel" id="filterShift" onchange="loadRecords(1)">
+      <option value="">All Shifts</option>
+      <option value="MORNING">Morning</option>
+      <option value="AFTERNOON">Afternoon</option>
+      <option value="NIGHT">Night</option>
+      <option value="GENERAL">General</option>
+    </select>
+    <select class="form-select cr-filter-sel" id="filterStatus" onchange="loadRecords(1)">
+      <option value="">All Status</option>
+      <option value="SUBMITTED">Submitted</option>
+      <option value="FLAGGED">Flagged</option>
+    </select>
+    <select class="form-select cr-filter-sel" id="filterLate" onchange="loadRecords(1)">
+      <option value="">All Records</option>
+      <option value="true">Late Only</option>
+      <option value="false">On Time Only</option>
+    </select>
+  </div>
+  <div class="cr-filters">
+    <label class="form-label" style="margin-right:.15rem;font-size:.8rem;white-space:nowrap">From:</label>
+    <input class="form-input cr-date-input" type="date" id="filterFrom" onchange="loadRecords(1)">
+    <label class="form-label" style="margin-right:.15rem;font-size:.8rem;white-space:nowrap">To:</label>
+    <input class="form-input cr-date-input" type="date" id="filterTo" onchange="loadRecords(1)">
+    <select class="form-select cr-filter-sel" id="sortSelect" onchange="loadRecords(1)">
+      <option value="newest">Newest First</option>
+      <option value="oldest">Oldest First</option>
+      <option value="location">By Location</option>
+    </select>
+    <button class="btn btn-sm btn-ghost" onclick="clearFilters()" title="Clear all filters">Clear Filters</button>
+  </div>
+
+  <div class="section">
+    <div class="table-wrap">
+      <table class="cr-tbl" role="table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Location</th>
+            <th>Shift</th>
+            <th class="hide-mobile">Supervisor</th>
+            <th class="hide-mobile">Workers</th>
+            <th>Photos</th>
+            <th>Status</th>
+            <th class="hide-mobile">Date</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="recBody"><tr><td colspan="9" class="loading-center">Loading…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="cr-pager" id="pager"></div>
+  </div>
+</main>
+
+<!-- Detail Modal -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal" style="max-width:620px">
+    <h2 class="modal-title" id="detailTitle">Cleaning Detail</h2>
+    <div id="detailContent"><div class="loading-center">Loading…</div></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-outline" onclick="App.closeModal('detailModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Flag Modal -->
+<div class="modal-overlay" id="flagModal">
+  <div class="modal" style="max-width:420px">
+    <h2 class="modal-title">Flag Cleaning Record</h2>
+    <form id="flagForm">
+      <input type="hidden" id="flagRecordId">
+      <div class="form-group">
+        <label class="form-label">Reason for Flagging</label>
+        <textarea class="form-input" id="flagReason" rows="3" maxlength="500" placeholder="Why is this record being flagged? (optional)"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="App.closeModal('flagModal')">Cancel</button>
+        <button type="submit" class="btn btn-warning" id="flagBtn">Flag Record</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div class="cr-lightbox" id="lightbox" onclick="closeLightbox()">
+  <button class="cr-lightbox-close" onclick="closeLightbox()">&times;</button>
+  <img id="lightboxImg" src="" alt="Photo">
+</div>
+
+<script src="/js/app.js"></script>
+<script src="/js/custom-select.js"></script>
+<script>
+if (!App.initAdmin('cleaning')) throw '';
+App.initNotifications(App.apiFetch);
+var esc = App.esc, $ = App.$;
+var currentPage = 1, totalPages = 1;
+var searchTimer = null;
+
+function debounceSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(function() { loadRecords(1); }, 300);
+}
+
+/* ── Load filter dropdowns ── */
+async function loadFilters() {
+  // Load locations
+  var locRes = await App.apiFetch('/locations?active=true');
+  if (locRes && locRes.ok) {
+    var locs = await locRes.json();
+    var locOpts = '<option value="">All Locations</option>';
+    (Array.isArray(locs) ? locs : []).forEach(function(l) {
+      locOpts += '<option value="' + esc(l.id) + '">' + esc(l.name) + ' (' + (l.type || '').toLowerCase() + ')</option>';
+    });
+    $('filterLocation').innerHTML = locOpts;
+  }
+  // Load supervisors
+  var supRes = await App.apiFetch('/supervisors?limit=200&active=true');
+  if (supRes && supRes.ok) {
+    var supData = await supRes.json();
+    var sups = supData.supervisors || supData || [];
+    var supOpts = '<option value="">All Supervisors</option>';
+    (Array.isArray(sups) ? sups : []).forEach(function(s) {
+      supOpts += '<option value="' + esc(s.id) + '">' + esc(s.name) + '</option>';
+    });
+    $('filterSupervisor').innerHTML = supOpts;
+  }
+}
+
+function clearFilters() {
+  $('searchInput').value = '';
+  $('filterLocation').value = '';
+  $('filterSupervisor').value = '';
+  $('filterShift').value = '';
+  $('filterStatus').value = '';
+  $('filterLate').value = '';
+  $('filterFrom').value = '';
+  $('filterTo').value = '';
+  $('sortSelect').value = 'newest';
+  loadRecords(1);
+}
+
+/* ── Load records ── */
+async function loadRecords(page) {
+  currentPage = page || 1;
+  var params = ['page=' + currentPage, 'limit=25'];
+  var search = $('searchInput').value.trim();
+  if (search) params.push('search=' + encodeURIComponent(search));
+  var loc = $('filterLocation').value; if (loc) params.push('locationId=' + loc);
+  var sup = $('filterSupervisor').value; if (sup) params.push('supervisorId=' + sup);
+  var shift = $('filterShift').value; if (shift) params.push('shift=' + shift);
+  var status = $('filterStatus').value; if (status) params.push('status=' + status);
+  var late = $('filterLate').value; if (late) params.push('isLate=' + late);
+  var from = $('filterFrom').value; if (from) params.push('from=' + from);
+  var to = $('filterTo').value; if (to) params.push('to=' + to);
+  var sort = $('sortSelect').value; if (sort && sort !== 'newest') params.push('sort=' + sort);
+
+  var res = await App.apiFetch('/cleaning-records?' + params.join('&'));
+  if (!res) return;
+  var data = await res.json();
+  var records = data.records || [];
+  totalPages = data.totalPages || data.pages || 1;
+  var total = data.total || 0;
+  var flaggedCount = data.flaggedCount || 0;
+  var lateCount = data.lateCount || 0;
+
+  // Summary bar
+  $('summaryBar').innerHTML = '<div class="cr-summary">' +
+    '<span class="cr-summary-item"><b>' + total + '</b> total records</span>' +
+    (flaggedCount > 0 ? '<span class="cr-summary-item"><b class="cr-flagged">' + flaggedCount + '</b> flagged</span>' : '') +
+    (lateCount > 0 ? '<span class="cr-summary-item"><b class="cr-late">' + lateCount + '</b> late</span>' : '') +
+    '<span class="cr-summary-item">Page <b>' + currentPage + '</b> of <b>' + totalPages + '</b></span>' +
+  '</div>';
+
+  if (!records.length) {
+    $('recBody').innerHTML = '<tr><td colspan="9" class="empty">' + (search ? 'No records match "' + esc(search) + '"' : 'No records found') + '</td></tr>';
+    $('pager').innerHTML = '';
+    return;
+  }
+
+  var startIdx = (currentPage - 1) * 25;
+  $('recBody').innerHTML = records.map(function(r, i) {
+    var num = startIdx + i + 1;
+    var photoCount = r._count ? r._count.images : 0;
+    var workers = r.workers ? r.workers.map(function(w) { return esc(w.name || ''); }).join(', ') : '—';
+    var workerCount = r.workers ? r.workers.length : 0;
+    var statusClass = r.status === 'FLAGGED' ? 'badge-danger' : 'badge-success';
+    var lateBadge = r.isLate ? ' <span class="badge badge-warning" title="Expected: ' + esc(r.expectedShift || '') + '">Late</span>' : '';
+    var rowClass = r.status === 'FLAGGED' ? ' class="cr-row-flagged"' : '';
+    var locType = r.location && r.location.type ? r.location.type.toLowerCase() : '';
+
+    return '<tr' + rowClass + '>' +
+      '<td data-label="#">' + num + '</td>' +
+      '<td data-label="Location"><span class="cr-loc-cell">' + esc(r.location ? r.location.name : '—') + '</span>' +
+        (locType ? '<span class="cr-loc-type">' + esc(locType) + '</span>' : '') + '</td>' +
+      '<td data-label="Shift"><span class="badge badge-muted">' + esc(r.shift) + '</span>' + lateBadge + '</td>' +
+      '<td data-label="Supervisor" class="hide-mobile"><span class="cr-supervisor">' + esc(r.supervisor ? r.supervisor.name : '—') + '</span></td>' +
+      '<td data-label="Workers" class="hide-mobile"><span class="cr-workers" title="' + esc(workers) + '">' + (workerCount > 2 ? esc(r.workers[0].name) + ' +' + (workerCount - 1) : workers) + '</span></td>' +
+      '<td data-label="Photos"><span class="cr-photos">' + photoCount + '</span></td>' +
+      '<td data-label="Status"><span class="badge ' + statusClass + '">' + esc(r.status) + '</span></td>' +
+      '<td data-label="Date" class="hide-mobile"><span class="cr-date">' + App.fmtDateShort(r.cleanedAt) + '</span></td>' +
+      '<td data-label="Actions"><div class="cr-actions">' +
+        '<button class="btn btn-sm btn-outline" onclick="viewDetail(\'' + r.id + '\')">View</button> ' +
+        (r.status !== 'FLAGGED'
+          ? '<button class="btn btn-sm btn-warning" onclick="openFlagModal(\'' + r.id + '\')">Flag</button>'
+          : '<button class="btn btn-sm btn-success" onclick="unflagRecord(\'' + r.id + '\')">Unflag</button>') +
+      '</div></td>' +
+    '</tr>';
+  }).join('');
+  renderPager();
+}
+
+/* ── Pagination with ellipsis ── */
+function renderPager() {
+  if (totalPages <= 1) { $('pager').innerHTML = ''; return; }
+  var html = '<button ' + (currentPage <= 1 ? 'disabled' : 'onclick="loadRecords(' + (currentPage-1) + ')"') + '>&laquo; Prev</button>';
+  var start = Math.max(1, currentPage - 2);
+  var end = Math.min(totalPages, currentPage + 2);
+  if (start > 1) html += '<button onclick="loadRecords(1)">1</button>' + (start > 2 ? '<span class="cr-pager-info">…</span>' : '');
+  for (var i = start; i <= end; i++) {
+    html += '<button class="' + (i === currentPage ? 'active' : '') + '" onclick="loadRecords(' + i + ')">' + i + '</button>';
+  }
+  if (end < totalPages) html += (end < totalPages - 1 ? '<span class="cr-pager-info">…</span>' : '') + '<button onclick="loadRecords(' + totalPages + ')">' + totalPages + '</button>';
+  html += '<button ' + (currentPage >= totalPages ? 'disabled' : 'onclick="loadRecords(' + (currentPage+1) + ')"') + '>Next &raquo;</button>';
+  $('pager').innerHTML = html;
+}
+
+/* ── Detail modal ── */
+async function viewDetail(id) {
+  $('detailContent').innerHTML = '<div class="loading-center">Loading…</div>';
+  App.openModal('detailModal');
+  var res = await App.apiFetch('/cleaning-records/' + id);
+  if (!res || !res.ok) { $('detailContent').innerHTML = '<div class="error-msg show" style="display:block">Failed to load record</div>'; return; }
+  var r = await res.json();
+  $('detailTitle').textContent = (r.location ? r.location.name : 'Cleaning') + ' — Detail';
+
+  function row(label, val, full) {
+    return '<div class="cr-detail-item' + (full ? ' cr-detail-full' : '') + '"><div class="cr-detail-label">' + label + '</div><div class="cr-detail-val">' + (val || '—') + '</div></div>';
+  }
+
+  var workers = r.workers ? r.workers.map(function(w) { return esc(w.name); }).join(', ') : '—';
+  var statusBadge = '<span class="badge ' + (r.status === 'FLAGGED' ? 'badge-danger' : 'badge-success') + '">' + esc(r.status) + '</span>';
+  var locInfo = r.location ? esc(r.location.name) + (r.location.type ? ' <span class="badge badge-muted" style="font-size:.68rem">' + esc(r.location.type.toLowerCase()) + '</span>' : '') : '—';
+
+  var html = '<div class="cr-detail-grid">' +
+    row('Location', locInfo) +
+    row('Status', statusBadge) +
+    row('Shift', '<span class="badge badge-muted">' + esc(r.shift) + '</span>') +
+    row('Supervisor', esc(r.supervisor ? r.supervisor.name : '—')) +
+    row('Workers', workers, true) +
+    row('Cleaned At', App.fmtDate(r.cleanedAt)) +
+    row('Created', App.fmtDate(r.createdAt)) +
+    (r.notes ? row('Notes', esc(r.notes), true) : '') +
+  '</div>';
+
+  // Late alert
+  if (r.isLate) {
+    html += '<div class="cr-late-alert"><b>⚠ Late / Cross-shift submission</b><br>Expected shift: <b>' + esc(r.expectedShift || '—') + '</b><br>Reason: ' + esc(r.lateReason || 'No reason provided') + '</div>';
+  }
+
+  // Flag alert
+  if (r.status === 'FLAGGED') {
+    html += '<div class="cr-flag-alert"><b>🚩 Flagged</b>' + (r.flagReason ? '<br>Reason: ' + esc(r.flagReason) : '') + '</div>';
+  }
+
+  // Photos
+  var images = r.images || [];
+  if (images.length) {
+    html += '<div style="margin-top:.75rem"><div class="cr-detail-label" style="margin-bottom:.4rem">Photos (' + images.length + ')</div><div class="cr-gallery">';
+    images.forEach(function(img) {
+      var url = App.imgUrl(img.imageUrl);
+      html += '<img class="cr-gallery-img" src="' + esc(url) + '" alt="Cleaning photo" onclick="openLightbox(\'' + esc(url) + '\')">';
+    });
+    html += '</div></div>';
+  } else {
+    html += '<div style="margin-top:.75rem;color:var(--text-muted);font-size:.82rem">No photos attached</div>';
+  }
+
+  $('detailContent').innerHTML = html;
+}
+
+/* ── Lightbox ── */
+function openLightbox(url) {
+  $('lightboxImg').src = url;
+  $('lightbox').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox() {
+  $('lightbox').classList.remove('active');
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && $('lightbox').classList.contains('active')) closeLightbox();
+});
+
+/* ── Flag with reason ── */
+function openFlagModal(id) {
+  $('flagRecordId').value = id;
+  $('flagReason').value = '';
+  App.openModal('flagModal');
+}
+
+$('flagForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  var id = $('flagRecordId').value;
+  var reason = $('flagReason').value.trim();
+  var btn = $('flagBtn');
+  btn.disabled = true; btn.textContent = 'Flagging…';
+  var res = await App.apiFetch('/cleaning-records/' + id + '/flag', {
+    method: 'PATCH',
+    body: JSON.stringify({ reason: reason })
+  });
+  btn.disabled = false; btn.textContent = 'Flag Record';
+  if (!res || !res.ok) { App.toast('Failed to flag record', 'error'); return; }
+  App.closeModal('flagModal');
+  App.toast('Record flagged', 'success');
+  loadRecords(currentPage);
+});
+
+async function unflagRecord(id) {
+  if (!await App.confirmDialog('Remove flag from this record?')) return;
+  var res = await App.apiFetch('/cleaning-records/' + id + '/flag', { method: 'PATCH', body: JSON.stringify({}) });
+  if (!res || !res.ok) { App.toast('Failed to unflag', 'error'); return; }
+  App.toast('Flag removed', 'success');
+  loadRecords(currentPage);
+}
+
+/* ── Init ── */
+loadFilters();
+loadRecords(1);
+</script>
+</body>
+</html>

@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="manifest" href="/site.webmanifest">
+<title>Submit Cleaning — Supervisor</title>
+<link rel="stylesheet" href="/css/design-system.css">
+<style>
+.sv-shell{max-width:540px;margin:0 auto;padding:1.25rem .75rem;min-height:calc(100dvh - 56px)}
+
+/* Location header */
+.loc-header{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1rem;margin-bottom:1.15rem;display:flex;align-items:center;gap:.6rem}
+.loc-icon{font-size:1.3rem;flex-shrink:0}
+.loc-info h2{font-size:1rem;font-weight:700;line-height:1.25;margin:0}
+.loc-info p{font-size:.72rem;color:var(--text-muted);margin:.1rem 0 0}
+
+/* Section card */
+.form-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1rem;margin-bottom:.85rem}
+.form-section-title{display:flex;align-items:center;gap:.35rem;font-size:.82rem;font-weight:700;margin-bottom:.65rem;color:var(--text)}
+
+/* Photo area */
+.photo-area{border:2px dashed var(--border);border-radius:var(--radius);padding:1rem;text-align:center;transition:border-color .15s}
+.photo-area.has-photos{border-color:var(--primary)}
+.photo-grid{display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.6rem}
+.photo-thumb{position:relative;width:58px;height:58px;border-radius:var(--radius-sm);overflow:hidden}
+.photo-thumb img{width:100%;height:100%;object-fit:cover}
+.photo-thumb button{position:absolute;top:2px;right:2px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1}
+.add-photo-btn{display:inline-flex;align-items:center;gap:.3rem;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:.45rem .85rem;font-size:.82rem;cursor:pointer;color:var(--text);transition:border-color .15s;min-height:var(--touch-min)}
+.add-photo-btn:hover{border-color:var(--primary)}
+.photo-count{font-size:.68rem;color:var(--text-muted);margin-top:.35rem}
+
+/* Worker list */
+.worker-list{display:flex;flex-direction:column;gap:.35rem;max-height:260px;overflow-y:auto}
+.worker-item{display:flex;align-items:center;gap:.55rem;background:var(--bg);padding:.55rem .7rem;border-radius:var(--radius);cursor:pointer;font-size:.85rem;border:1px solid transparent;transition:border-color .1s}
+.worker-item:hover{border-color:var(--border)}
+.worker-item input[type=checkbox]{width:20px;height:20px;accent-color:var(--primary);flex-shrink:0}
+.worker-item-name{flex:1}
+.worker-item-id{font-size:.68rem;color:var(--text-muted)}
+.worker-count{font-size:.68rem;color:var(--text-muted);margin-top:.35rem}
+
+/* Submit button */
+.submit-section{position:sticky;bottom:0;background:var(--bg);padding:.75rem 0 .25rem;z-index:5}
+
+/* Success screen */
+.success-screen{text-align:center;padding:3rem 1rem;display:none}
+.success-check{width:76px;height:76px;border-radius:50%;background:var(--success);display:flex;align-items:center;justify-content:center;margin:0 auto 1.25rem;font-size:2.2rem;color:#fff;box-shadow:0 4px 16px rgba(16,185,129,.25)}
+.success-title{font-size:1.2rem;font-weight:700;margin-bottom:.35rem}
+.success-sub{font-size:.82rem;color:var(--text-muted);margin-bottom:1.5rem}
+
+@media(max-width:480px){
+  .sv-shell{padding:.85rem .5rem}
+  .form-section{padding:.85rem}
+  .loc-header{padding:.85rem}
+  .photo-thumb{width:52px;height:52px}
+}
+</style>
+</head>
+<body>
+<nav class="topbar">
+  <div class="topbar-left">
+    <span class="topbar-brand">Housekeeping</span>
+    <div class="sv-nav">
+      <a href="/supervisor-scan" class="sv-nav-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 012-2h2"/><path d="M17 3h2a2 2 0 012 2v2"/><path d="M21 17v2a2 2 0 01-2 2h-2"/><path d="M7 21H5a2 2 0 01-2-2v-2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>Scan</a>
+      <a href="/supervisor-tickets" class="sv-nav-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 5H9a2 2 0 00-2 2v10a2 2 0 002 2h6a2 2 0 002-2V7a2 2 0 00-2-2z"/><path d="M12 11h.01"/><path d="M12 15h.01"/></svg>Tickets</a>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-user" id="userName"></span>
+    <button class="btn btn-sm btn-ghost" onclick="App.logoutSup()">Logout</button>
+  </div>
+</nav>
+
+<div class="sv-shell" id="formView">
+  <!-- Location header -->
+  <div class="loc-header">
+    <span class="loc-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg></span>
+    <div class="loc-info">
+      <h2 id="locName">Loading…</h2>
+      <p>Cleaning record submission</p>
+    </div>
+  </div>
+
+  <form id="cleanForm">
+    <!-- Shift -->
+    <div class="form-section">
+      <div class="form-section-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Shift</div>
+      <select class="form-select" id="shift" required onchange="checkShiftMismatch()">
+        <option value="MORNING">Morning (6 AM – 2 PM)</option>
+        <option value="AFTERNOON">Afternoon (2 PM – 10 PM)</option>
+        <option value="NIGHT">Night (10 PM – 6 AM)</option>
+        <option value="GENERAL">General</option>
+      </select>
+      <div id="shiftWarning" style="display:none;margin-top:.5rem;padding:.55rem .7rem;background:var(--warning-bg);border:1px solid var(--warning);border-radius:var(--radius-sm);font-size:.78rem;color:var(--warning-text)">
+        <b>⚠ Cross-shift submission:</b> <span id="shiftWarningText"></span>
+      </div>
+      <div id="lateReasonWrap" style="display:none;margin-top:.45rem">
+        <label class="form-label" style="font-size:.78rem;margin-bottom:.2rem">Reason for late / cross-shift submission <span style="color:var(--danger)">*</span></label>
+        <textarea class="form-textarea" id="lateReason" rows="2" placeholder="Explain why you are submitting this record outside the shift window…" maxlength="500" style="font-size:.82rem"></textarea>
+      </div>
+    </div>
+
+    <!-- Photos -->
+    <div class="form-section">
+      <div class="form-section-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg> Evidence Photos</div>
+      <div class="photo-area" id="photoArea">
+        <div class="photo-grid" id="photoThumbs"></div>
+        <label class="add-photo-btn" id="addPhotoBtn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg> Add Photo
+          <input type="file" accept="image/*" capture="environment" multiple hidden id="photoInput">
+        </label>
+        <div class="photo-count"><span id="photoCount">0</span>/5 photos</div>
+      </div>
+    </div>
+
+    <!-- Workers -->
+    <div class="form-section">
+      <div class="form-section-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg> Workers Present</div>
+      <div class="worker-list" id="workerList"><div style="text-align:center;padding:1rem;color:var(--text-muted);font-size:.82rem">Loading workers…</div></div>
+      <div class="worker-count"><span id="workerCount">0</span> selected</div>
+    </div>
+
+    <!-- Notes -->
+    <div class="form-section">
+      <div class="form-section-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Notes</div>
+      <textarea class="form-textarea" id="notes" rows="2" placeholder="Any additional observations…" maxlength="500" style="font-size:.82rem"></textarea>
+    </div>
+
+    <div id="formError" class="error-msg"></div>
+
+    <div class="submit-section">
+      <button type="submit" class="btn btn-success btn-block" id="submitBtn" style="font-size:.92rem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="vertical-align:-2px"><polyline points="20 6 9 17 4 12"/></svg> Submit Cleaning Record</button>
+    </div>
+  </form>
+</div>
+
+<div class="sv-shell success-screen" id="successView">
+  <div class="success-check"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>
+  <div class="success-title">Cleaning Submitted!</div>
+  <p class="success-sub">Record has been saved successfully.</p>
+  <a href="/supervisor-scan" class="btn btn-primary btn-block" style="text-decoration:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px"><path d="M3 7V5a2 2 0 012-2h2"/><path d="M17 3h2a2 2 0 012 2v2"/><path d="M21 17v2a2 2 0 01-2 2h-2"/><path d="M7 21H5a2 2 0 01-2-2v-2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg> Scan Next Location</a>
+</div>
+
+<script src="/js/app.js"></script>
+<script src="/js/custom-select.js"></script>
+<script>
+if (!App.initSupervisor()) throw '';
+App.initNotifications(App.supFetch, 'supervisor');
+var esc = App.esc, $ = App.$;
+var locationId = null, photos = [];
+var _submitLabel = $('submitBtn').innerHTML;
+
+// Parse URL params
+var params = new URLSearchParams(location.search);
+locationId = params.get('locationId');
+var locName = params.get('name') || '';
+var qrParam = params.get('qr');
+
+// If we have a QR code but no locationId, look up the location first
+if (!locationId && qrParam) {
+  (async function() {
+    try {
+      var res = await App.supFetch('/locations/qr/' + encodeURIComponent(qrParam));
+      if (!res || !res.ok) { App.toast('Location not found for this QR code', 'error'); location.href = '/supervisor-scan'; return; }
+      var loc = await res.json();
+      location.replace('/supervisor-clean?locationId=' + loc.id + '&name=' + encodeURIComponent(loc.name));
+    } catch(e) { location.href = '/supervisor-scan'; }
+  })();
+  throw '';
+}
+
+if (!locationId) { location.href = '/supervisor-scan'; throw ''; }
+$('locName').textContent = decodeURIComponent(locName);
+
+// Auto-select shift based on time
+var hour = new Date().getHours();
+if (hour >= 6 && hour < 14) $('shift').value = 'MORNING';
+else if (hour >= 14 && hour < 22) $('shift').value = 'AFTERNOON';
+else $('shift').value = 'NIGHT';
+
+// Shift mismatch detection
+function getCurrentExpectedShift() {
+  var h = new Date().getHours();
+  if (h >= 6 && h < 14) return 'MORNING';
+  if (h >= 14 && h < 22) return 'AFTERNOON';
+  return 'NIGHT';
+}
+var shiftLabels = { MORNING: 'Morning (6 AM – 2 PM)', AFTERNOON: 'Afternoon (2 PM – 10 PM)', NIGHT: 'Night (10 PM – 6 AM)', GENERAL: 'General' };
+
+function checkShiftMismatch() {
+  var selected = $('shift').value;
+  var expected = getCurrentExpectedShift();
+  var isMismatch = selected !== 'GENERAL' && selected !== expected;
+  $('shiftWarning').style.display = isMismatch ? '' : 'none';
+  $('lateReasonWrap').style.display = isMismatch ? '' : 'none';
+  if (isMismatch) {
+    $('shiftWarningText').textContent = 'You selected ' + shiftLabels[selected] + ' but the current time falls under ' + shiftLabels[expected] + '. A reason is required.';
+  }
+}
+checkShiftMismatch();
+
+// Load workers
+async function loadWorkers() {
+  $('workerList').innerHTML = '<div style="padding:.75rem;text-align:center;color:var(--text-muted);font-size:.82rem">Loading workers…</div>';
+  var res = await App.supFetch('/workers');
+  if (!res) { $('workerList').innerHTML = '<div style="padding:.75rem;text-align:center;color:var(--text-muted);font-size:.82rem">Failed to load workers</div>'; return; }
+  var workers = await res.json();
+  if (!workers.length) { $('workerList').innerHTML = '<div style="text-align:center;padding:1rem;color:var(--text-muted);font-size:.82rem">No workers available</div>'; return; }
+  $('workerList').innerHTML = workers.filter(function(w) { return w.isActive !== false; }).map(function(w) {
+    return '<label class="worker-item"><input type="checkbox" name="workers" value="' + w.id + '" onchange="updateWorkerCount()"><span class="worker-item-name">' + esc(w.name) + '</span>' + (w.employeeId ? '<span class="worker-item-id">' + esc(w.employeeId) + '</span>' : '') + '</label>';
+  }).join('');
+}
+loadWorkers();
+
+function updateWorkerCount() {
+  var count = document.querySelectorAll('input[name=workers]:checked').length;
+  $('workerCount').textContent = count;
+}
+
+// Photo handling
+var _allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+$('photoInput').addEventListener('change', function(e) {
+  var files = Array.from(e.target.files);
+  for (var i = 0; i < files.length && photos.length < 5; i++) {
+    if (_allowedTypes.indexOf(files[i].type) === -1) { App.toast('Only JPEG, PNG and WebP photos are allowed', 'error'); continue; }
+    if (files[i].size > 5 * 1024 * 1024) { App.toast('Photo too large (max 5MB)', 'error'); continue; }
+    photos.push(files[i]);
+  }
+  renderPhotos();
+  e.target.value = '';
+});
+
+function renderPhotos() {
+  // Revoke old object URLs to prevent memory leaks
+  var oldImgs = $('photoThumbs').querySelectorAll('img');
+  oldImgs.forEach(function(img) { URL.revokeObjectURL(img.src); });
+  $('photoCount').textContent = photos.length;
+  $('addPhotoBtn').style.display = photos.length >= 5 ? 'none' : '';
+  $('photoArea').classList.toggle('has-photos', photos.length > 0);
+  $('photoThumbs').innerHTML = photos.map(function(f, i) {
+    return '<div class="photo-thumb"><img src="' + URL.createObjectURL(f) + '"><button type="button" onclick="removePhoto(' + i + ')">×</button></div>';
+  }).join('');
+}
+
+window.removePhoto = function(idx) {
+  photos.splice(idx, 1);
+  renderPhotos();
+};
+
+// Submit
+$('cleanForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  App.hideError('formError');
+
+  // Validate: at least 1 photo
+  if (photos.length === 0) {
+    App.showError('formError', 'Please add at least one evidence photo.');
+    return;
+  }
+
+  // Validate: late reason required when cross-shift
+  var isShiftMismatch = $('shiftWarning').style.display !== 'none';
+  var lateVal = $('lateReason').value.trim();
+  if (isShiftMismatch && !lateVal) {
+    App.showError('formError', 'Please provide a reason for cross-shift submission.');
+    $('lateReason').focus();
+    return;
+  }
+
+  var workerIds = Array.from(document.querySelectorAll('input[name=workers]:checked')).map(function(el) { return el.value; });
+
+  var fd = new FormData();
+  fd.append('locationId', locationId);
+  fd.append('shift', $('shift').value);
+  fd.append('notes', $('notes').value.trim());
+  fd.append('workerIds', JSON.stringify(workerIds));
+  if (lateVal) fd.append('lateReason', lateVal);
+  for (var j = 0; j < photos.length; j++) fd.append('image', photos[j]);
+
+  $('submitBtn').disabled = true;
+  $('submitBtn').textContent = 'Submitting…';
+  try {
+    var res = await App.supFetch('/cleaning-records', { method: 'POST', body: fd });
+    if (!res) { $('submitBtn').disabled = false; $('submitBtn').innerHTML = _submitLabel; return; }
+    if (!res.ok) {
+      var d = await res.json();
+      App.showError('formError', d.error || 'Failed to submit');
+      $('submitBtn').disabled = false;
+      $('submitBtn').innerHTML = _submitLabel;
+      return;
+    }
+    $('formView').style.display = 'none';
+    $('successView').style.display = '';
+  } catch (err) {
+    App.showError('formError', 'Network error. Please try again.');
+    $('submitBtn').disabled = false;
+    $('submitBtn').innerHTML = _submitLabel;
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="manifest" href="/site.webmanifest">
+<title>Audit Logs — Housekeeping Admin</title>
+<link rel="stylesheet" href="/css/design-system.css">
+<style>
+/* ── Summary bar ── */
+.al-summary{display:flex;gap:1rem;flex-wrap:wrap;padding:.6rem 0 .5rem;border-bottom:1px solid var(--border-light);margin-bottom:.75rem}
+.al-summary-item{font-size:.78rem;color:var(--text-muted)}
+.al-summary-item b{color:var(--text);font-weight:700}
+
+/* ── Quick date buttons ── */
+.al-quick-dates{display:flex;gap:.3rem;flex-wrap:wrap}
+.al-quick-btn{padding:.2rem .5rem;font-size:.7rem;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-muted);cursor:pointer;transition:all .15s}
+.al-quick-btn:hover,.al-quick-btn.active{border-color:var(--primary);color:var(--primary);background:rgba(14,165,164,.04)}
+
+/* ── Filter bar ── */
+.al-filters{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:.75rem}
+.al-filters .form-input,.al-filters .form-select{font-size:.82rem;height:36px}
+.al-filters .cs-trigger{font-size:.82rem;height:36px;min-height:36px}
+.al-search{min-width:160px;max-width:220px;flex:1}
+.al-filter-sel{min-width:120px;max-width:160px}
+.al-date-input{max-width:150px}
+.al-filter-row{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;width:100%}
+
+/* ── Table ── */
+.al-tbl{width:100%;border-collapse:collapse;font-size:.84rem}
+.al-tbl thead th{text-align:left;padding:.55rem .65rem;color:var(--text-muted);border-bottom:2px solid var(--border);font-weight:600;font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;position:sticky;top:0;background:var(--surface);z-index:1}
+.al-tbl tbody td{padding:.55rem .65rem;border-bottom:1px solid var(--border-light);vertical-align:middle}
+.al-tbl tbody tr:nth-child(even) td{background:rgba(248,250,252,.5)}
+.al-tbl tbody tr:hover td{background:rgba(14,165,164,.04)}
+.al-tbl td:last-child{white-space:nowrap}
+
+/* ── Row cells ── */
+.al-time{font-size:.75rem;color:var(--text-muted);white-space:nowrap}
+.al-actor{display:flex;align-items:center;gap:.35rem}
+.al-actor-name{font-weight:500;font-size:.82rem}
+.al-actor-role{font-size:.6rem;color:var(--text-muted);text-transform:uppercase;background:var(--bg);border:1px solid var(--border-light);border-radius:var(--radius-sm);padding:0 .3rem;line-height:1.4;white-space:nowrap}
+.al-action{font-weight:500;font-size:.82rem}
+.al-entity-badge{font-size:.72rem}
+
+/* ── Detail modal ── */
+.al-detail-grid{display:flex;flex-direction:column;gap:.6rem}
+.al-detail-row{display:flex;gap:.5rem;align-items:baseline}
+.al-detail-label{font-size:.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em;font-weight:600;min-width:70px;flex-shrink:0}
+.al-detail-val{font-size:.85rem;font-weight:500;word-break:break-word}
+.al-changes-table{width:100%;border-collapse:collapse;font-size:.82rem;margin-top:.35rem}
+.al-changes-table th{text-align:left;padding:.35rem .5rem;font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em;border-bottom:2px solid var(--border);font-weight:600}
+.al-changes-table td{padding:.35rem .5rem;border-bottom:1px solid var(--border-light);vertical-align:top}
+.al-changes-table tr:last-child td{border-bottom:none}
+.al-old{color:var(--danger-text);text-decoration:line-through}
+.al-new{color:var(--success-text)}
+.al-detail-section{background:var(--bg);border:1px solid var(--border-light);border-radius:var(--radius);padding:.6rem;margin-top:.25rem}
+.al-detail-section-title{font-size:.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.4rem}
+.al-kv-table{width:100%;border-collapse:collapse;font-size:.82rem}
+.al-kv-table td{padding:.25rem .4rem;border-bottom:1px solid var(--border-light);vertical-align:top}
+.al-kv-table td:first-child{font-weight:600;white-space:nowrap;color:var(--text-muted);width:130px}
+.al-kv-table tr:last-child td{border-bottom:none}
+.al-json-block{font-family:var(--font-mono);font-size:.72rem;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:.5rem;max-height:200px;overflow:auto;word-break:break-word;white-space:pre-wrap}
+
+/* ── Pager ── */
+.al-pager{display:flex;gap:.35rem;justify-content:center;align-items:center;padding:.75rem 0}
+.al-pager button{padding:.3rem .6rem;font-size:.78rem;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);cursor:pointer;min-height:32px;transition:all .15s}
+.al-pager button:hover:not(:disabled){border-color:var(--primary);color:var(--primary)}
+.al-pager button.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.al-pager button:disabled{opacity:.4;cursor:default}
+.al-pager-info{font-size:.75rem;color:var(--text-muted);margin:0 .5rem}
+
+/* ── Responsive ≤640px (card fallback) ── */
+@media(max-width:640px){
+  .al-search{min-width:100%;max-width:100%}
+  .al-filter-sel,.al-date-input{flex:1 1 45%}
+  .al-tbl thead{display:none}
+  .al-tbl tbody tr{display:block;padding:.75rem;margin-bottom:.5rem;border:1px solid var(--border-light);border-radius:var(--radius);background:var(--surface)}
+  .al-tbl tbody tr:nth-child(even){background:var(--surface)}
+  .al-tbl tbody td{display:flex;justify-content:space-between;align-items:center;padding:.25rem 0;border:none;font-size:.82rem}
+  .al-tbl tbody td::before{content:attr(data-label);font-weight:600;font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em;flex-shrink:0;margin-right:.5rem}
+  .al-tbl tbody td:first-child{padding-top:0}
+  .al-tbl tbody td:last-child{padding-top:.35rem;justify-content:flex-start}
+  .al-tbl tbody td:last-child::before{display:none}
+  .al-quick-dates{justify-content:center}
+}
+@media(min-width:769px) and (max-width:960px){
+  .al-tbl{font-size:.78rem}
+  .al-tbl thead th,.al-tbl tbody td{padding:.4rem .45rem}
+  .al-search{max-width:170px}
+}
+@media(min-width:1280px){
+  .al-tbl{font-size:.88rem}
+}
+@media(max-width:380px){
+  .al-summary{flex-direction:column;gap:.3rem}
+  .al-pager button{padding:.2rem .4rem;font-size:.72rem;min-height:28px}
+}
+</style>
+</head>
+<body>
+<nav class="topbar">
+  <div class="topbar-left">
+    <button class="nav-toggle" id="nav-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg></button>
+    <span class="topbar-brand">Housekeeping</span>
+    <div class="topbar-nav" id="topbar-nav"></div>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-user" id="userName"></span>
+    <button class="btn btn-sm btn-ghost" onclick="App.logout()">Logout</button>
+  </div>
+</nav>
+<div class="sa-banner" id="sa-banner"></div>
+
+<main class="container">
+  <div class="toolbar">
+    <h2 class="toolbar-title">Audit Logs</h2>
+    <div class="al-quick-dates">
+      <button class="al-quick-btn" onclick="setDateRange('today')">Today</button>
+      <button class="al-quick-btn" onclick="setDateRange('7d')">Last 7 days</button>
+      <button class="al-quick-btn" onclick="setDateRange('30d')">Last 30 days</button>
+      <button class="al-quick-btn" onclick="setDateRange('all')">All time</button>
+    </div>
+  </div>
+
+  <!-- Filter bar -->
+  <div class="al-filters">
+    <div class="al-filter-row">
+      <input class="form-input al-search" id="alSearch" placeholder="Search actions…" oninput="debounceSearch()">
+      <select class="form-select al-filter-sel" id="filterAction" onchange="loadLogs(1)">
+        <option value="">All Actions</option>
+      </select>
+      <select class="form-select al-filter-sel" id="filterEntity" onchange="loadLogs(1)">
+        <option value="">All Entities</option>
+      </select>
+      <select class="form-select al-filter-sel" id="filterActorType" onchange="loadLogs(1)">
+        <option value="">All Actors</option>
+        <option value="admin">Admin</option>
+        <option value="supervisor">Supervisor</option>
+        <option value="super_admin">Super Admin</option>
+        <option value="system">System</option>
+      </select>
+    </div>
+    <div class="al-filter-row">
+      <input class="form-input al-date-input" id="filterFrom" type="date" title="From date" onchange="loadLogs(1)">
+      <input class="form-input al-date-input" id="filterTo" type="date" title="To date" onchange="loadLogs(1)">
+      <button class="btn btn-sm btn-ghost" onclick="clearFilters()" title="Clear all filters">Clear</button>
+    </div>
+  </div>
+
+  <!-- Summary bar -->
+  <div class="al-summary" id="summaryBar"></div>
+
+  <div class="section">
+    <div class="table-wrap">
+      <table class="al-tbl">
+        <thead>
+          <tr>
+            <th>#</th><th>Date &amp; Time</th><th>Actor</th><th>Action</th>
+            <th class="hide-mobile">Entity</th><th>Details</th>
+          </tr>
+        </thead>
+        <tbody id="logBody"><tr><td colspan="6" class="loading-center">Loading…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="al-pager" id="pager"></div>
+  </div>
+</main>
+
+<!-- Detail Modal -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal" style="max-width:580px">
+    <h2 class="modal-title">Log Details</h2>
+    <div id="detailContent"></div>
+    <div class="modal-actions"><button type="button" class="btn btn-outline" onclick="App.closeModal('detailModal')">Close</button></div>
+  </div>
+</div>
+
+<script src="/js/app.js"></script>
+<script src="/js/custom-select.js"></script>
+<script>
+if (!App.initAdmin('audit')) throw '';
+App.initNotifications(App.apiFetch);
+var esc = App.esc, $ = App.$;
+var currentPage = 1, totalPages = 1, PAGE_SIZE = 30;
+var searchTimer = null;
+var _currentLogs = [];
+var activeQuickDate = '';
+
+function debounceSearch() { clearTimeout(searchTimer); searchTimer = setTimeout(function() { loadLogs(1); }, 300); }
+
+function formatAction(a) {
+  if (!a) return '—';
+  return a.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+}
+
+// ── Quick date range buttons ──
+function setDateRange(range) {
+  var from = $('filterFrom'), to = $('filterTo');
+  var today = new Date().toISOString().slice(0, 10);
+  activeQuickDate = range;
+  if (range === 'today') {
+    from.value = today; to.value = today;
+  } else if (range === '7d') {
+    var d = new Date(); d.setDate(d.getDate() - 7);
+    from.value = d.toISOString().slice(0, 10); to.value = today;
+  } else if (range === '30d') {
+    var d = new Date(); d.setDate(d.getDate() - 30);
+    from.value = d.toISOString().slice(0, 10); to.value = today;
+  } else {
+    from.value = ''; to.value = '';
+  }
+  updateQuickDateHighlight();
+  loadLogs(1);
+}
+function updateQuickDateHighlight() {
+  var btns = document.querySelectorAll('.al-quick-btn');
+  var labels = ['today', '7d', '30d', 'all'];
+  for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('active', labels[i] === activeQuickDate);
+}
+
+// ── Load filter dropdowns ──
+async function loadFilterOptions() {
+  var res1 = App.apiFetch('/audit-logs/actions');
+  var res2 = App.apiFetch('/audit-logs/entity-types');
+  var r1 = await res1, r2 = await res2;
+  if (r1 && r1.ok) {
+    var actions = await r1.json();
+    var sel = $('filterAction');
+    for (var i = 0; i < actions.length; i++) {
+      var opt = document.createElement('option');
+      opt.value = actions[i];
+      opt.textContent = formatAction(actions[i]);
+      sel.appendChild(opt);
+    }
+  }
+  if (r2 && r2.ok) {
+    var entities = await r2.json();
+    var sel = $('filterEntity');
+    for (var i = 0; i < entities.length; i++) {
+      var opt = document.createElement('option');
+      opt.value = entities[i];
+      opt.textContent = entities[i];
+      sel.appendChild(opt);
+    }
+  }
+}
+
+// ── Load logs ──
+async function loadLogs(page) {
+  currentPage = page || 1;
+  var params = ['page=' + currentPage, 'limit=' + PAGE_SIZE];
+  var search = $('alSearch').value.trim();
+  if (search) params.push('search=' + encodeURIComponent(search));
+  var action = $('filterAction').value; if (action) params.push('action=' + encodeURIComponent(action));
+  var entity = $('filterEntity').value; if (entity) params.push('entityType=' + encodeURIComponent(entity));
+  var actorType = $('filterActorType').value; if (actorType) params.push('actorType=' + actorType);
+  var from = $('filterFrom').value; if (from) params.push('from=' + from);
+  var to = $('filterTo').value; if (to) params.push('to=' + to);
+
+  var res = await App.apiFetch('/audit-logs?' + params.join('&'));
+  if (!res) return;
+  var data = await res.json();
+  var logs = data.logs || [];
+  _currentLogs = logs;
+  totalPages = data.pages || 1;
+
+  renderSummary(data.total);
+
+  if (!logs.length) {
+    $('logBody').innerHTML = '<tr><td colspan="6" class="empty">No audit logs found</td></tr>';
+    $('pager').innerHTML = '';
+    return;
+  }
+
+  $('logBody').innerHTML = logs.map(function(l, i) {
+    var num = (currentPage - 1) * PAGE_SIZE + i + 1;
+    var roleBadge = l.actorRole ? '<span class="al-actor-role">' + esc(l.actorRole) + '</span>' : '';
+    var hasDetail = l.oldValue || l.newValue;
+    var actionColor = getActionColor(l.action);
+    return '<tr>' +
+      '<td data-label="#">' + num + '</td>' +
+      '<td data-label="Date" class="al-time">' + App.fmtDate(l.createdAt) + '</td>' +
+      '<td data-label="Actor"><div class="al-actor"><span class="al-actor-name">' + esc(l.actorName) + '</span>' + roleBadge + '</div></td>' +
+      '<td data-label="Action"><span class="al-action" style="color:' + actionColor + '">' + esc(formatAction(l.action)) + '</span></td>' +
+      '<td data-label="Entity" class="hide-mobile">' + (l.entityType ? '<span class="badge badge-muted al-entity-badge">' + esc(l.entityType) + '</span>' : '—') + '</td>' +
+      '<td data-label="Details">' +
+        '<button class="btn btn-sm btn-outline" onclick="viewDetail(\'' + l.id + '\')">View</button>' +
+      '</td></tr>';
+  }).join('');
+  renderPager();
+}
+
+function getActionColor(action) {
+  if (!action) return 'inherit';
+  if (action.includes('created') || action.includes('reactivated')) return 'var(--success-text)';
+  if (action.includes('deleted') || action.includes('deactivated')) return 'var(--danger-text)';
+  if (action.includes('flagged')) return 'var(--warning-text)';
+  return 'inherit';
+}
+
+function renderSummary(total) {
+  var html = '<span class="al-summary-item">Total: <b>' + total + '</b></span>';
+  html += '<span class="al-summary-item">Page <b>' + currentPage + '</b> of <b>' + totalPages + '</b></span>';
+  html += '<span class="al-summary-item">Showing <b>' + PAGE_SIZE + '</b> per page</span>';
+  $('summaryBar').innerHTML = html;
+}
+
+function renderPager() {
+  if (totalPages <= 1) { $('pager').innerHTML = ''; return; }
+  var html = '<button' + (currentPage <= 1 ? ' disabled' : '') + ' onclick="loadLogs(' + (currentPage - 1) + ')">&#8592; Prev</button>';
+  var pages = [1];
+  if (currentPage - 2 > 2) pages.push('…');
+  for (var i = Math.max(2, currentPage - 2); i <= Math.min(totalPages - 1, currentPage + 2); i++) pages.push(i);
+  if (currentPage + 2 < totalPages - 1) pages.push('…');
+  if (totalPages > 1) pages.push(totalPages);
+  for (var j = 0; j < pages.length; j++) {
+    if (pages[j] === '…') { html += '<span class="al-pager-info">…</span>'; }
+    else { html += '<button class="' + (pages[j] === currentPage ? 'active' : '') + '" onclick="loadLogs(' + pages[j] + ')">' + pages[j] + '</button>'; }
+  }
+  html += '<button' + (currentPage >= totalPages ? ' disabled' : '') + ' onclick="loadLogs(' + (currentPage + 1) + ')">Next &#8594;</button>';
+  $('pager').innerHTML = html;
+}
+
+function clearFilters() {
+  $('alSearch').value = '';
+  $('filterAction').value = '';
+  $('filterEntity').value = '';
+  $('filterActorType').value = '';
+  $('filterFrom').value = '';
+  $('filterTo').value = '';
+  activeQuickDate = '';
+  updateQuickDateHighlight();
+  loadLogs(1);
+}
+
+// ── Detail modal ──
+function viewDetail(id) {
+  var log = _currentLogs.find(function(l) { return l.id === id; });
+  if (!log) { App.toast('Log not found', 'error'); return; }
+  showLogDetail(log);
+}
+
+function showLogDetail(l) {
+  var actionColor = getActionColor(l.action);
+  var html = '<div class="al-detail-grid">';
+  html += '<div class="al-detail-row"><span class="al-detail-label">Action</span><span class="al-detail-val" style="color:' + actionColor + '">' + esc(formatAction(l.action)) + '</span></div>';
+  html += '<div class="al-detail-row"><span class="al-detail-label">Actor</span><span class="al-detail-val">' + esc(l.actorName) + (l.actorRole ? ' <span class="badge badge-muted" style="font-size:.6rem;vertical-align:middle">' + esc(l.actorRole) + '</span>' : '') + '</span></div>';
+  html += '<div class="al-detail-row"><span class="al-detail-label">Date</span><span class="al-detail-val">' + App.fmtDate(l.createdAt) + '</span></div>';
+  if (l.entityType) html += '<div class="al-detail-row"><span class="al-detail-label">Entity</span><span class="al-detail-val">' + esc(l.entityType) + (l.entityId ? ' <span style="font-size:.7rem;color:var(--text-light)">' + esc(l.entityId.substring(0, 8)) + '…</span>' : '') + '</span></div>';
+
+  var oldVal = l.oldValue && typeof l.oldValue === 'object' ? l.oldValue : null;
+  var newVal = l.newValue && typeof l.newValue === 'object' ? l.newValue : null;
+
+  if (oldVal && newVal) {
+    var allKeys = Object.keys(Object.assign({}, oldVal, newVal));
+    var rows = '';
+    allKeys.forEach(function(k) {
+      if (isIdField(k)) return;
+      var o = formatVal(oldVal[k]), n = formatVal(newVal[k]);
+      if (o === n) return;
+      rows += '<tr><td style="font-weight:600;white-space:nowrap">' + esc(friendlyLabel(k)) + '</td>' +
+        '<td class="al-old">' + esc(o) + '</td>' +
+        '<td class="al-new">' + esc(n) + '</td></tr>';
+    });
+    if (rows) {
+      html += '<div class="al-detail-section"><div class="al-detail-section-title">Changes</div>' +
+        '<table class="al-changes-table"><thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    }
+  } else if (newVal) {
+    html += '<div class="al-detail-section"><div class="al-detail-section-title">Details</div>' + renderValueTable(newVal) + '</div>';
+  } else if (oldVal) {
+    html += '<div class="al-detail-section"><div class="al-detail-section-title">Previous State</div>' + renderValueTable(oldVal) + '</div>';
+  } else if (l.newValue) {
+    html += '<div class="al-detail-section"><div class="al-detail-section-title">Details</div><div class="al-json-block">' + esc(String(l.newValue)) + '</div></div>';
+  } else if (l.oldValue) {
+    html += '<div class="al-detail-section"><div class="al-detail-section-title">Previous State</div><div class="al-json-block">' + esc(String(l.oldValue)) + '</div></div>';
+  } else {
+    html += '<div style="margin-top:.5rem;color:var(--text-light);font-size:.82rem">No additional details recorded for this action.</div>';
+  }
+
+  html += '</div>';
+  $('detailContent').innerHTML = html;
+  App.openModal('detailModal');
+}
+
+// ── Value formatting helpers ──
+var LABEL_MAP = {
+  name: 'Name', title: 'Title', type: 'Type', description: 'Description',
+  isActive: 'Active', sortOrder: 'Sort Order', parentId: 'Parent',
+  status: 'Status', priority: 'Priority', email: 'Email', phone: 'Phone',
+  role: 'Role', locationId: 'Location', assignedToId: 'Assigned To',
+  resolvedAt: 'Resolved At', createdAt: 'Created At', updatedAt: 'Updated At',
+  building: 'Building', floor: 'Floor', code: 'Code', notes: 'Notes',
+  category: 'Category', source: 'Source', expectedShift: 'Expected Shift',
+  isLate: 'Late', lateReason: 'Late Reason', flagReason: 'Flag Reason',
+  employeeId: 'Employee ID', department: 'Department', gender: 'Gender',
+  bloodGroup: 'Blood Group', dateOfBirth: 'Date of Birth', dateOfJoin: 'Date of Join',
+  address: 'Address', aadharNo: 'Aadhar No', designation: 'Designation',
+  resolvedNote: 'Resolution Note', reason: 'Reason', qrCode: 'QR Code'
+};
+
+function friendlyLabel(key) {
+  if (LABEL_MAP[key]) return LABEL_MAP[key];
+  return key.replace(/([A-Z])/g, ' $1').replace(/^./, function(c) { return c.toUpperCase(); }).replace(/_/g, ' ');
+}
+
+function isIdField(k) { return k === 'id' || k === 'orgId'; }
+
+function isUUID(v) { return typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v); }
+
+function formatVal(v) {
+  if (v === null || v === undefined) return '—';
+  if (typeof v === 'boolean') return v ? 'Yes' : 'No';
+  if (typeof v === 'object') {
+    // Handle {from: x, to: y} shape used by some audit entries
+    if ('to' in v) return formatVal(v.to);
+    if ('from' in v) return formatVal(v.from);
+    return JSON.stringify(v);
+  }
+  if (isUUID(v)) return v.substring(0, 8) + '…';
+  return String(v);
+}
+
+function renderValueTable(obj) {
+  var rows = '';
+  Object.keys(obj).forEach(function(k) {
+    if (isIdField(k)) return;
+    var val = obj[k];
+    if (isUUID(val)) return;
+    rows += '<tr><td>' + esc(friendlyLabel(k)) + '</td><td>' + esc(formatVal(val)) + '</td></tr>';
+  });
+  if (!rows) return '<p style="color:var(--text-muted);font-size:.82rem">No details available</p>';
+  return '<table class="al-kv-table"><tbody>' + rows + '</tbody></table>';
+}
+
+// ── Init ──
+loadFilterOptions();
+loadLogs(1);
+</script>
+</body>
+</html>

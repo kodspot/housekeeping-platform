@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="manifest" href="/site.webmanifest">
+<title>Tickets — Housekeeping Admin</title>
+<link rel="stylesheet" href="/css/design-system.css">
+<style>
+/* ── Summary bar ── */
+.tk-summary{display:flex;gap:1rem;flex-wrap:wrap;padding:.6rem 0 .5rem;border-bottom:1px solid var(--border-light);margin-bottom:.75rem}
+.tk-summary-item{font-size:.78rem;color:var(--text-muted)}
+.tk-summary-item b{color:var(--text);font-weight:700}
+
+/* ── Stats cards ── */
+.tk-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem;margin-bottom:1rem}
+.tk-stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:.65rem .75rem;text-align:center;transition:box-shadow .15s;cursor:pointer}
+.tk-stat:hover{box-shadow:var(--shadow)}
+.tk-stat-num{font-size:1.3rem;font-weight:700;line-height:1}
+.tk-stat-label{font-size:.68rem;color:var(--text-muted);margin-top:.2rem;text-transform:uppercase}
+.tk-stat.open .tk-stat-num{color:var(--danger)}
+.tk-stat.progress .tk-stat-num{color:#f59e0b}
+.tk-stat.resolved .tk-stat-num{color:var(--success)}
+.tk-stat.closed .tk-stat-num{color:var(--text-muted)}
+.tk-stat.active-filter{border-color:var(--primary);box-shadow:0 0 0 2px rgba(14,165,164,.15)}
+
+/* ── Filter bar ── */
+.tk-filters{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:.75rem}
+.tk-filters .form-input,.tk-filters .form-select{font-size:.82rem;height:36px}
+.tk-filters .cs-trigger{font-size:.82rem;height:36px;min-height:36px}
+.tk-search{min-width:160px;max-width:220px;flex:1}
+.tk-filter-sel{min-width:120px;max-width:160px}
+.tk-date-input{max-width:150px}
+.tk-filter-row{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;width:100%}
+
+/* ── Table ── */
+.tk-tbl{width:100%;border-collapse:collapse;font-size:.84rem}
+.tk-tbl thead th{text-align:left;padding:.55rem .65rem;color:var(--text-muted);border-bottom:2px solid var(--border);font-weight:600;font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;position:sticky;top:0;background:var(--surface);z-index:1}
+.tk-tbl tbody td{padding:.55rem .65rem;border-bottom:1px solid var(--border-light);vertical-align:middle}
+.tk-tbl tbody tr:nth-child(even) td{background:rgba(248,250,252,.5)}
+.tk-tbl tbody tr:hover td{background:rgba(14,165,164,.04)}
+.tk-tbl td:last-child{white-space:nowrap}
+.tk-urgent-row td{background:rgba(225,29,72,.03)!important}
+.tk-title-cell{font-weight:600}
+.tk-desc-sub{font-size:.7rem;color:var(--text-muted);font-weight:400;display:block;margin-top:1px;max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tk-location{font-size:.8rem;color:var(--text-muted)}
+.tk-date{font-size:.75rem;color:var(--text-muted)}
+.tk-actions{display:flex;gap:4px;flex-wrap:wrap}
+
+/* ── Detail modal ── */
+.tk-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem .75rem}
+.tk-detail-item{padding:.35rem 0}
+.tk-detail-label{font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:1px}
+.tk-detail-val{font-size:.88rem;font-weight:500;word-break:break-word}
+.tk-detail-full{grid-column:1/-1}
+.tk-detail-img{width:100%;max-height:280px;object-fit:contain;border-radius:var(--radius);cursor:pointer;background:var(--bg);margin-top:.3rem}
+.tk-resolution-box{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:var(--radius);padding:.75rem;margin:.6rem 0}
+.tk-resolution-box h4{font-size:.78rem;font-weight:700;color:#15803d;margin-bottom:.4rem}
+.tk-resolution-box p{font-size:.82rem;color:#166534;margin:.2rem 0}
+.tk-resolution-box img{width:100%;max-height:200px;object-fit:contain;border-radius:var(--radius-sm);margin-top:.35rem;cursor:pointer}
+.tk-guest-box{background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.15);border-radius:var(--radius);padding:.65rem;margin:.6rem 0}
+.tk-guest-box .tk-guest-title{font-size:.65rem;color:#3b82f6;text-transform:uppercase;font-weight:700;letter-spacing:.04em;margin-bottom:.3rem}
+.tk-guest-box p{font-size:.82rem;margin:.15rem 0}
+.tk-desc-section{background:var(--bg);border-radius:var(--radius);padding:.65rem;margin:.6rem 0;font-size:.82rem;line-height:1.5;border:1px solid var(--border-light)}
+
+/* ── Create form photo ── */
+.tk-photo-area{display:flex;align-items:center;gap:.6rem;margin-top:.2rem;flex-wrap:wrap}
+.tk-photo-label{display:inline-flex;align-items:center;gap:.3rem;padding:.45rem .75rem;border:1px dashed var(--border);border-radius:var(--radius);cursor:pointer;font-size:.78rem;color:var(--text-muted);min-height:var(--touch-min);transition:border-color .15s,color .15s}
+.tk-photo-label:hover{border-color:var(--primary);color:var(--primary)}
+.tk-photo-preview{width:48px;height:48px;border-radius:var(--radius-sm);object-fit:cover;border:1px solid var(--border);display:none}
+
+/* ── Pager ── */
+.tk-pager{display:flex;gap:.35rem;justify-content:center;align-items:center;padding:.75rem 0}
+.tk-pager button{padding:.3rem .6rem;font-size:.78rem;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);cursor:pointer;min-height:32px;transition:all .15s}
+.tk-pager button:hover:not(:disabled){border-color:var(--primary);color:var(--primary)}
+.tk-pager button.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.tk-pager button:disabled{opacity:.4;cursor:default}
+.tk-pager-info{font-size:.75rem;color:var(--text-muted);margin:0 .5rem}
+
+/* ── Responsive ≤640px (card fallback) ── */
+@media(max-width:640px){
+  .tk-stats{grid-template-columns:repeat(2,1fr)}
+  .tk-search{min-width:100%;max-width:100%}
+  .tk-filter-sel,.tk-date-input{flex:1 1 45%}
+  .tk-tbl thead{display:none}
+  .tk-tbl tbody tr{display:block;padding:.75rem;margin-bottom:.5rem;border:1px solid var(--border-light);border-radius:var(--radius);background:var(--surface)}
+  .tk-tbl tbody tr:nth-child(even){background:var(--surface)}
+  .tk-tbl tbody td{display:flex;justify-content:space-between;align-items:center;padding:.25rem 0;border:none;font-size:.82rem}
+  .tk-tbl tbody td::before{content:attr(data-label);font-weight:600;font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em;flex-shrink:0;margin-right:.5rem}
+  .tk-tbl tbody td:first-child{padding-top:0}
+  .tk-tbl tbody td:last-child{padding-top:.35rem;justify-content:flex-start}
+  .tk-tbl tbody td:last-child::before{display:none}
+  .tk-actions{width:100%}
+  .tk-desc-sub{display:none}
+  .tk-detail-grid{grid-template-columns:1fr}
+}
+@media(max-width:768px){
+  .tk-stats{grid-template-columns:repeat(2,1fr)}
+  .tk-detail-grid{grid-template-columns:1fr 1fr}
+}
+@media(min-width:769px) and (max-width:960px){
+  .tk-tbl{font-size:.78rem}
+  .tk-tbl thead th,.tk-tbl tbody td{padding:.4rem .45rem}
+  .tk-actions .btn-sm{font-size:.7rem;padding:.15rem .3rem}
+  .tk-search{max-width:170px}
+}
+@media(min-width:1280px){
+  .tk-tbl{font-size:.88rem}
+}
+@media(max-width:380px){
+  .tk-summary{flex-direction:column;gap:.3rem}
+  .tk-pager button{padding:.2rem .4rem;font-size:.72rem;min-height:28px}
+  .tk-stat{padding:.5rem}
+  .tk-stat-num{font-size:1.1rem}
+}
+</style>
+</head>
+<body>
+<nav class="topbar">
+  <div class="topbar-left">
+    <button class="nav-toggle" id="nav-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg></button>
+    <span class="topbar-brand">Housekeeping</span>
+    <div class="topbar-nav" id="topbar-nav"></div>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-user" id="userName"></span>
+    <button class="btn btn-sm btn-ghost" onclick="App.logout()">Logout</button>
+  </div>
+</nav>
+<div class="sa-banner" id="sa-banner"></div>
+
+<main class="container">
+  <div class="toolbar">
+    <h2 class="toolbar-title">Tickets</h2>
+    <button class="btn btn-primary" onclick="openCreate()">+ New Ticket</button>
+  </div>
+
+  <!-- Stats cards (clickable to filter) -->
+  <div class="tk-stats" id="statsBar">
+    <div class="tk-stat open" onclick="filterByStatus('OPEN')"><div class="tk-stat-num" id="statOpen">-</div><div class="tk-stat-label">Open</div></div>
+    <div class="tk-stat progress" onclick="filterByStatus('IN_PROGRESS')"><div class="tk-stat-num" id="statProgress">-</div><div class="tk-stat-label">In Progress</div></div>
+    <div class="tk-stat resolved" onclick="filterByStatus('RESOLVED')"><div class="tk-stat-num" id="statResolved">-</div><div class="tk-stat-label">Resolved</div></div>
+    <div class="tk-stat closed" onclick="filterByStatus('CLOSED')"><div class="tk-stat-num" id="statClosed">-</div><div class="tk-stat-label">Closed</div></div>
+  </div>
+
+  <!-- Filter bar -->
+  <div class="tk-filters">
+    <div class="tk-filter-row">
+      <input class="form-input tk-search" id="tkSearch" placeholder="Search tickets…" oninput="debounceSearch()">
+      <select class="form-select tk-filter-sel" id="filterStatus" onchange="loadTickets(1)">
+        <option value="">All Status</option>
+        <option value="OPEN">Open</option><option value="IN_PROGRESS">In Progress</option>
+        <option value="RESOLVED">Resolved</option><option value="CLOSED">Closed</option>
+      </select>
+      <select class="form-select tk-filter-sel" id="filterPriority" onchange="loadTickets(1)">
+        <option value="">All Priority</option>
+        <option value="LOW">Low</option><option value="NORMAL">Normal</option>
+        <option value="HIGH">High</option><option value="URGENT">Urgent</option>
+      </select>
+      <select class="form-select tk-filter-sel" id="filterSource" onchange="loadTickets(1)">
+        <option value="">All Sources</option>
+        <option value="INTERNAL">Internal</option>
+        <option value="PUBLIC">Public QR</option>
+      </select>
+    </div>
+    <div class="tk-filter-row">
+      <select class="form-select tk-filter-sel" id="filterLocation" onchange="loadTickets(1)">
+        <option value="">All Locations</option>
+      </select>
+      <select class="form-select tk-filter-sel" id="filterAssignee" onchange="loadTickets(1)">
+        <option value="">All Assignees</option>
+      </select>
+      <input class="form-input tk-date-input" id="filterFrom" type="date" title="From date" onchange="loadTickets(1)">
+      <input class="form-input tk-date-input" id="filterTo" type="date" title="To date" onchange="loadTickets(1)">
+      <button class="btn btn-sm btn-ghost" onclick="clearFilters()" title="Clear all filters">Clear</button>
+    </div>
+  </div>
+
+  <!-- Summary bar -->
+  <div class="tk-summary" id="summaryBar"></div>
+
+  <div class="section">
+    <div class="table-wrap">
+      <table class="tk-tbl">
+        <thead>
+          <tr>
+            <th>#</th><th>Title</th><th>Priority</th><th>Status</th>
+            <th class="hide-mobile">Location</th><th class="hide-mobile">Assigned</th><th class="hide-mobile">Created</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="ticketBody"><tr><td colspan="8" class="loading-center">Loading…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="tk-pager" id="pager"></div>
+  </div>
+</main>
+
+<!-- Create Ticket Modal -->
+<div class="modal-overlay" id="createModal">
+  <div class="modal">
+    <h2 class="modal-title">New Ticket</h2>
+    <div id="createError" class="error-msg"></div>
+    <form id="createForm" enctype="multipart/form-data">
+      <div class="form-group"><label class="form-label">Title *</label><input class="form-input" type="text" id="cTitle" required maxlength="200"></div>
+      <div class="form-group"><label class="form-label">Description</label><textarea class="form-textarea" id="cDesc" rows="3" maxlength="1000"></textarea></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Location *</label><select class="form-select" id="cLocation" required><option value="">— Select —</option></select></div>
+        <div class="form-group"><label class="form-label">Priority</label>
+          <select class="form-select" id="cPriority">
+            <option value="LOW">Low</option><option value="NORMAL" selected>Normal</option><option value="HIGH">High</option><option value="URGENT">Urgent</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Photo <span style="font-weight:400;color:var(--text-light);font-size:.72rem">(optional)</span></label>
+        <div class="tk-photo-area">
+          <label class="tk-photo-label" for="cPhoto">📷 Attach photo</label>
+          <input type="file" id="cPhoto" accept="image/jpeg,image/png,image/webp" style="display:none">
+          <img id="cPhotoPreview" class="tk-photo-preview">
+          <span id="cPhotoName" style="font-size:.72rem;color:var(--text-muted)"></span>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="App.closeModal('createModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Edit Ticket Modal -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <h2 class="modal-title">Edit Ticket</h2>
+    <div id="editError" class="error-msg"></div>
+    <form id="editForm">
+      <input type="hidden" id="eId">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Status</label>
+          <select class="form-select" id="eStatus">
+            <option value="OPEN">Open</option><option value="IN_PROGRESS">In Progress</option>
+            <option value="RESOLVED">Resolved</option><option value="CLOSED">Closed</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Priority</label>
+          <select class="form-select" id="ePriority">
+            <option value="LOW">Low</option><option value="NORMAL">Normal</option><option value="HIGH">High</option><option value="URGENT">Urgent</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Assign Supervisor</label><select class="form-select" id="eAssign"><option value="">— Unassigned —</option></select></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="App.closeModal('editModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Detail Modal -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal" style="max-width:580px">
+    <h2 class="modal-title">Ticket Details</h2>
+    <div id="detailContent"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-outline" onclick="App.closeModal('detailModal')">Close</button>
+      <button type="button" class="btn btn-primary" id="detailEditBtn" onclick="">Edit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox-overlay" id="lightbox" onclick="closeLightbox()">
+  <button class="lightbox-close" onclick="event.stopPropagation();closeLightbox()" aria-label="Close">×</button>
+  <img class="lightbox-img" id="lightboxImg" onclick="event.stopPropagation()">
+</div>
+
+<script src="/js/app.js"></script>
+<script src="/js/custom-select.js"></script>
+<script>
+if (!App.initAdmin('tickets')) throw '';
+App.initNotifications(App.apiFetch);
+var esc = App.esc, $ = App.$;
+var currentPage = 1, totalPages = 1, PAGE_SIZE = 20;
+var searchTimer = null;
+var locations = [], supervisors = [];
+
+function debounceSearch() { clearTimeout(searchTimer); searchTimer = setTimeout(function() { loadTickets(1); }, 300); }
+
+// ── Stats (from API response) ──
+function updateStats(stats) {
+  if (!stats) return;
+  $('statOpen').textContent = stats.OPEN || 0;
+  $('statProgress').textContent = stats.IN_PROGRESS || 0;
+  $('statResolved').textContent = stats.RESOLVED || 0;
+  $('statClosed').textContent = stats.CLOSED || 0;
+  // Highlight active stat card
+  var activeStatus = $('filterStatus').value;
+  var cards = document.querySelectorAll('.tk-stat');
+  var statusMap = ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'];
+  for (var i = 0; i < cards.length; i++) {
+    cards[i].classList.toggle('active-filter', activeStatus === statusMap[i]);
+  }
+}
+
+function filterByStatus(status) {
+  var sel = $('filterStatus');
+  sel.value = sel.value === status ? '' : status;
+  loadTickets(1);
+}
+
+// ── List ──
+async function loadTickets(page) {
+  currentPage = page || 1;
+  var params = ['page=' + currentPage, 'limit=' + PAGE_SIZE];
+  var search = $('tkSearch').value.trim();
+  if (search) params.push('search=' + encodeURIComponent(search));
+  var status = $('filterStatus').value; if (status) params.push('status=' + status);
+  var priority = $('filterPriority').value; if (priority) params.push('priority=' + priority);
+  var source = $('filterSource').value; if (source) params.push('source=' + source);
+  var loc = $('filterLocation').value; if (loc) params.push('locationId=' + loc);
+  var assignee = $('filterAssignee').value; if (assignee) params.push('assignedToId=' + assignee);
+  var from = $('filterFrom').value; if (from) params.push('from=' + from);
+  var to = $('filterTo').value; if (to) params.push('to=' + to);
+
+  var res = await App.apiFetch('/tickets?' + params.join('&'));
+  if (!res) return;
+  var data = await res.json();
+  var tickets = data.tickets || [];
+  totalPages = data.pages || 1;
+
+  updateStats(data.stats);
+  renderSummary(data.total, tickets);
+
+  if (!tickets.length) {
+    $('ticketBody').innerHTML = '<tr><td colspan="8" class="empty">No tickets found</td></tr>';
+    $('pager').innerHTML = '';
+    return;
+  }
+
+  $('ticketBody').innerHTML = tickets.map(function(t, i) {
+    var num = (currentPage - 1) * PAGE_SIZE + i + 1;
+    var priClass = t.priority === 'URGENT' ? 'badge-danger' : t.priority === 'HIGH' ? 'badge-warning' : t.priority === 'NORMAL' ? 'badge-info' : 'badge-muted';
+    var statClass = t.status === 'OPEN' ? 'badge-danger' : t.status === 'IN_PROGRESS' ? 'badge-warning' : t.status === 'RESOLVED' ? 'badge-success' : 'badge-muted';
+    var srcBadge = t.source === 'PUBLIC' ? ' <span class="badge badge-info" style="font-size:.58rem;vertical-align:middle;">QR</span>' : '';
+    var rowCls = t.priority === 'URGENT' ? ' class="tk-urgent-row"' : '';
+    var descSub = t.description ? '<span class="tk-desc-sub">' + esc(t.description) + '</span>' : '';
+    return '<tr' + rowCls + '>' +
+      '<td data-label="#">' + num + '</td>' +
+      '<td data-label="Title"><span class="tk-title-cell">' + esc(t.title) + '</span>' + srcBadge + descSub + '</td>' +
+      '<td data-label="Priority"><span class="badge ' + priClass + '">' + t.priority + '</span></td>' +
+      '<td data-label="Status"><span class="badge ' + statClass + '">' + t.status.replace('_',' ') + '</span></td>' +
+      '<td data-label="Location" class="hide-mobile tk-location">' + esc(t.location ? t.location.name : '—') + '</td>' +
+      '<td data-label="Assigned" class="hide-mobile">' + (t.assignedTo ? esc(t.assignedTo.name) : '<em style="color:var(--text-light)">Unassigned</em>') + '</td>' +
+      '<td data-label="Created" class="hide-mobile tk-date">' + App.fmtDateShort(t.createdAt) + '</td>' +
+      '<td class="tk-actions">' +
+        '<button class="btn btn-sm btn-outline" onclick="viewDetail(\'' + t.id + '\')">View</button> ' +
+        '<button class="btn btn-sm btn-outline" onclick="openEdit(\'' + t.id + '\')">Edit</button>' +
+      '</td></tr>';
+  }).join('');
+  renderPager();
+}
+
+function renderSummary(total, tickets) {
+  var urgent = 0, unassigned = 0;
+  for (var i = 0; i < tickets.length; i++) {
+    if (tickets[i].priority === 'URGENT') urgent++;
+    if (!tickets[i].assignedToId) unassigned++;
+  }
+  var html = '<span class="tk-summary-item">Total: <b>' + total + '</b></span>';
+  if (urgent) html += '<span class="tk-summary-item" style="color:var(--danger)">Urgent on page: <b>' + urgent + '</b></span>';
+  if (unassigned) html += '<span class="tk-summary-item" style="color:var(--warning-text)">Unassigned on page: <b>' + unassigned + '</b></span>';
+  html += '<span class="tk-summary-item">Page <b>' + currentPage + '</b> of <b>' + totalPages + '</b></span>';
+  $('summaryBar').innerHTML = html;
+}
+
+function renderPager() {
+  if (totalPages <= 1) { $('pager').innerHTML = ''; return; }
+  var html = '<button' + (currentPage <= 1 ? ' disabled' : '') + ' onclick="loadTickets(' + (currentPage - 1) + ')">← Prev</button>';
+  var pages = [];
+  pages.push(1);
+  if (currentPage - 2 > 2) pages.push('…');
+  for (var i = Math.max(2, currentPage - 2); i <= Math.min(totalPages - 1, currentPage + 2); i++) pages.push(i);
+  if (currentPage + 2 < totalPages - 1) pages.push('…');
+  if (totalPages > 1) pages.push(totalPages);
+  for (var j = 0; j < pages.length; j++) {
+    if (pages[j] === '…') { html += '<span class="tk-pager-info">…</span>'; }
+    else { html += '<button class="' + (pages[j] === currentPage ? 'active' : '') + '" onclick="loadTickets(' + pages[j] + ')">' + pages[j] + '</button>'; }
+  }
+  html += '<button' + (currentPage >= totalPages ? ' disabled' : '') + ' onclick="loadTickets(' + (currentPage + 1) + ')">Next →</button>';
+  $('pager').innerHTML = html;
+}
+
+function clearFilters() {
+  $('tkSearch').value = '';
+  $('filterStatus').value = '';
+  $('filterPriority').value = '';
+  $('filterSource').value = '';
+  $('filterLocation').value = '';
+  $('filterAssignee').value = '';
+  $('filterFrom').value = '';
+  $('filterTo').value = '';
+  loadTickets(1);
+}
+
+// ── Load locations & supervisors for filters + create form ──
+async function loadLocations() {
+  var res = await App.apiFetch('/locations/tree?active=true');
+  if (!res) return;
+  var tree = await res.json();
+  var cOpts = '<option value="">— Select —</option>';
+  var fOpts = '<option value="">All Locations</option>';
+  function flatten(nodes, prefix) {
+    for (var i = 0; i < nodes.length; i++) {
+      var opt = '<option value="' + nodes[i].id + '">' + esc(prefix + nodes[i].name) + '</option>';
+      cOpts += opt;
+      fOpts += opt;
+      if (nodes[i].children) flatten(nodes[i].children, prefix + nodes[i].name + ' → ');
+    }
+  }
+  if (Array.isArray(tree)) flatten(tree, '');
+  $('cLocation').innerHTML = cOpts;
+  $('filterLocation').innerHTML = fOpts;
+}
+
+async function loadSupervisors() {
+  var res = await App.apiFetch('/supervisors');
+  if (!res) return;
+  var data = await res.json();
+  var sups = data.supervisors || [];
+  supervisors = sups;
+  var assignOpts = '<option value="">— Unassigned —</option>';
+  var filterOpts = '<option value="">All Assignees</option>';
+  for (var i = 0; i < sups.length; i++) {
+    var opt = '<option value="' + sups[i].id + '">' + esc(sups[i].name) + '</option>';
+    assignOpts += opt;
+    filterOpts += opt;
+  }
+  $('eAssign').innerHTML = assignOpts;
+  $('filterAssignee').innerHTML = filterOpts;
+}
+
+// ── Create ──
+function openCreate() {
+  $('createForm').reset();
+  $('cPhotoPreview').style.display = 'none';
+  $('cPhotoName').textContent = '';
+  App.hideError('createError');
+  App.openModal('createModal');
+}
+
+$('cPhoto').addEventListener('change', function() {
+  if (this.files && this.files[0]) {
+    var f = this.files[0];
+    if (f.size > 5 * 1024 * 1024) { App.toast('Image too large (max 5MB)', 'error'); this.value = ''; return; }
+    $('cPhotoPreview').src = URL.createObjectURL(f);
+    $('cPhotoPreview').style.display = 'block';
+    $('cPhotoName').textContent = f.name;
+  }
+});
+
+$('createForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  var title = $('cTitle').value.trim();
+  var loc = $('cLocation').value;
+  if (!title || !loc) { App.showError('createError', 'Title and location are required'); return; }
+
+  var fd = new FormData();
+  fd.append('title', title);
+  fd.append('locationId', loc);
+  fd.append('priority', $('cPriority').value);
+  var desc = $('cDesc').value.trim();
+  if (desc) fd.append('description', desc);
+  if ($('cPhoto').files[0]) fd.append('image', $('cPhoto').files[0]);
+
+  var res = await App.apiFetch('/tickets', { method: 'POST', body: fd });
+  if (!res) return;
+  if (!res.ok) { var d = await res.json(); App.showError('createError', d.error || 'Failed'); return; }
+  $('createForm').reset();
+  $('cPhotoPreview').style.display = 'none';
+  $('cPhotoName').textContent = '';
+  App.closeModal('createModal'); App.toast('Ticket created', 'success');
+  loadTickets(1);
+});
+
+// ── Edit ──
+async function openEdit(id) {
+  var res = await App.apiFetch('/tickets/' + id);
+  if (!res || !res.ok) return;
+  var t = await res.json();
+  $('eId').value = t.id;
+  $('eStatus').value = t.status;
+  $('ePriority').value = t.priority;
+  $('eAssign').value = t.assignedToId || '';
+  App.hideError('editError');
+  App.openModal('editModal');
+}
+
+$('editForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  var id = $('eId').value;
+  var body = {
+    status: $('eStatus').value,
+    priority: $('ePriority').value,
+    assignedToId: $('eAssign').value || null
+  };
+  var res = await App.apiFetch('/tickets/' + id, { method: 'PATCH', body: JSON.stringify(body) });
+  if (!res) return;
+  if (!res.ok) { var d = await res.json(); App.showError('editError', d.error || 'Failed'); return; }
+  App.closeModal('editModal'); App.toast('Ticket updated', 'success');
+  loadTickets(currentPage);
+});
+
+// ── Detail ──
+async function viewDetail(id) {
+  var res = await App.apiFetch('/tickets/' + id);
+  if (!res || !res.ok) return;
+  var t = await res.json();
+
+  var priClass = t.priority === 'URGENT' ? 'badge-danger' : t.priority === 'HIGH' ? 'badge-warning' : t.priority === 'NORMAL' ? 'badge-info' : 'badge-muted';
+  var statClass = t.status === 'OPEN' ? 'badge-danger' : t.status === 'IN_PROGRESS' ? 'badge-warning' : t.status === 'RESOLVED' ? 'badge-success' : 'badge-muted';
+  var srcBadge = t.source === 'PUBLIC' ? '<span class="badge badge-info" style="margin-left:.3rem">Public QR</span>' : '<span class="badge badge-muted" style="margin-left:.3rem">Internal</span>';
+
+  var html = '<div class="tk-detail-grid">';
+  html += '<div class="tk-detail-item"><div class="tk-detail-label">Title</div><div class="tk-detail-val">' + esc(t.title) + ' ' + srcBadge + '</div></div>';
+  html += '<div class="tk-detail-item"><div class="tk-detail-label">Status</div><div class="tk-detail-val"><span class="badge ' + statClass + '">' + t.status.replace('_',' ') + '</span></div></div>';
+  html += '<div class="tk-detail-item"><div class="tk-detail-label">Priority</div><div class="tk-detail-val"><span class="badge ' + priClass + '">' + t.priority + '</span></div></div>';
+  html += '<div class="tk-detail-item"><div class="tk-detail-label">Location</div><div class="tk-detail-val">' + esc(t.location ? t.location.name : '—') + '</div></div>';
+  html += '<div class="tk-detail-item"><div class="tk-detail-label">Created by</div><div class="tk-detail-val">' + esc(t.createdBy ? t.createdBy.name + ' (' + t.createdBy.role + ')' : (t.source === 'PUBLIC' ? 'Guest (QR Scan)' : '—')) + '</div></div>';
+  html += '<div class="tk-detail-item"><div class="tk-detail-label">Assigned to</div><div class="tk-detail-val">' + esc(t.assignedTo ? t.assignedTo.name : 'Unassigned') + '</div></div>';
+  html += '<div class="tk-detail-item"><div class="tk-detail-label">Created</div><div class="tk-detail-val">' + App.fmtDate(t.createdAt) + '</div></div>';
+  if (t.resolvedAt) html += '<div class="tk-detail-item"><div class="tk-detail-label">Resolved</div><div class="tk-detail-val">' + App.fmtDate(t.resolvedAt) + '</div></div>';
+  html += '</div>';
+
+  if (t.description) {
+    html += '<div class="tk-desc-section">' + esc(t.description) + '</div>';
+  }
+
+  if (t.source === 'PUBLIC') {
+    html += '<div class="tk-guest-box">';
+    html += '<div class="tk-guest-title">Guest Information</div>';
+    html += '<p><b>Name:</b> ' + esc(t.guestName || 'Anonymous') + '</p>';
+    html += '<p><b>Phone:</b> ' + esc(t.guestPhone || '—') + '</p>';
+    if (t.issueType) html += '<p><b>Issue:</b> ' + esc(t.issueType.replace(/_/g, ' ')) + '</p>';
+    html += '</div>';
+  }
+
+  if (t.imageUrl) {
+    html += '<div style="margin:.6rem 0"><div class="tk-detail-label" style="margin-bottom:.3rem">Complaint Photo</div>';
+    html += '<img class="tk-detail-img" src="' + esc(App.imgUrl(t.imageUrl)) + '" onclick="openLightbox(this.src)" alt="Complaint photo">';
+    html += '</div>';
+  }
+
+  if (t.resolvedImageUrl || t.resolvedNote) {
+    html += '<div class="tk-resolution-box">';
+    html += '<h4>✓ Resolution Proof</h4>';
+    if (t.resolvedNote) html += '<p>' + esc(t.resolvedNote) + '</p>';
+    if (t.resolvedImageUrl) html += '<img src="' + esc(App.imgUrl(t.resolvedImageUrl)) + '" onclick="openLightbox(this.src)" alt="Resolution proof">';
+    if (t.resolvedAt) html += '<p style="font-size:.72rem;margin-top:.4rem;opacity:.7">Resolved on ' + App.fmtDate(t.resolvedAt) + '</p>';
+    html += '</div>';
+  }
+
+  $('detailContent').innerHTML = html;
+  $('detailEditBtn').onclick = function() { App.closeModal('detailModal'); openEdit(t.id); };
+  App.openModal('detailModal');
+}
+
+// ── Lightbox ──
+function openLightbox(src) {
+  if (event) event.stopPropagation();
+  $('lightboxImg').src = src;
+  $('lightbox').classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox() { $('lightbox').classList.remove('show'); document.body.style.overflow = ''; }
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeLightbox(); });
+
+// ── Init ──
+loadLocations();
+loadSupervisors();
+loadTickets(1);
+</script>
+</body>
+</html>

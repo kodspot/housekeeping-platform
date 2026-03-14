@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="manifest" href="/site.webmanifest">
+<title>Analytics — Housekeeping Admin</title>
+<link rel="stylesheet" href="/css/design-system.css">
+<style>
+/* ── Period Selector ── */
+.period-bar{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem}
+.period-btn{padding:.35rem .7rem;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);font-size:.78rem;font-weight:500;color:var(--text-muted);cursor:pointer;transition:all .12s;min-height:var(--touch-min)}
+.period-btn:hover{border-color:var(--primary);color:var(--primary)}
+.period-btn.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.period-custom{display:flex;align-items:center;gap:.35rem;flex-wrap:wrap}
+.period-custom input[type=date]{padding:.3rem .5rem;border:1px solid var(--border);border-radius:var(--radius);font-size:.75rem;background:var(--surface);color:var(--text);min-height:var(--touch-min)}
+.period-label{font-size:.72rem;color:var(--text-muted)}
+.period-info{margin-left:auto;font-size:.68rem;color:var(--text-muted);display:flex;align-items:center;gap:.5rem}
+
+/* ── Summary cards ── */
+.sum-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.6rem;margin-bottom:1.25rem}
+.sum-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:.85rem .9rem;position:relative;overflow:hidden;transition:box-shadow .15s}
+.sum-card:hover{box-shadow:var(--shadow)}
+.sum-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2.5px;border-radius:var(--radius-lg) var(--radius-lg) 0 0}
+.sum-card.sc-clean::before{background:#10b981}
+.sum-card.sc-flag::before{background:#ef4444}
+.sum-card.sc-ticket::before{background:#f59e0b}
+.sum-card.sc-photo::before{background:#3b82f6}
+.sum-card.sc-comp::before{background:#0ea5a4}
+.sum-card.sc-avg::before{background:#8b5cf6}
+.sum-val{font-size:1.5rem;font-weight:700;color:var(--text);line-height:1.2}
+.sum-label{font-size:.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em;font-weight:600}
+.sum-change{font-size:.65rem;font-weight:600;margin-top:.15rem}
+.sum-change.up{color:#10b981}
+.sum-change.down{color:#ef4444}
+.sum-change.flat{color:var(--text-light)}
+
+/* ── Section container ── */
+.an-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.15rem;margin-bottom:1rem;box-shadow:var(--shadow-sm)}
+.an-title{font-size:.95rem;font-weight:600;color:var(--text);margin-bottom:.75rem;display:flex;align-items:center;gap:.4rem}
+.an-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem}
+.an-error{text-align:center;padding:2rem 1rem;color:var(--danger);font-size:.82rem}
+
+/* ── Shift bars ── */
+.shift-bars{display:flex;gap:.75rem;align-items:flex-end;height:120px;padding-top:.5rem}
+.shift-col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:.2rem;height:100%}
+.shift-bar-fill{width:70%;max-width:50px;min-width:20px;border-radius:var(--radius) var(--radius) 0 0;transition:height .3s;min-height:2px}
+.shift-bar-fill.morning{background:linear-gradient(180deg,#f59e0b,#fbbf24)}
+.shift-bar-fill.afternoon{background:linear-gradient(180deg,#3b82f6,#60a5fa)}
+.shift-bar-fill.night{background:linear-gradient(180deg,#8b5cf6,#a78bfa)}
+.shift-bar-fill.general{background:linear-gradient(180deg,#10b981,#34d399)}
+.shift-bar-val{font-size:.7rem;font-weight:600;color:var(--text)}
+.shift-bar-pct{font-size:.58rem;color:var(--text-muted)}
+.shift-bar-label{font-size:.62rem;color:var(--text-muted);font-weight:500}
+
+/* ── Trend chart ── */
+.an-trend{display:flex;align-items:flex-end;gap:0;height:140px;padding-top:.5rem}
+.an-trend-col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:.2rem;height:100%}
+.an-trend-fill{width:60%;min-width:4px;max-width:36px;border-radius:var(--radius-sm) var(--radius-sm) 0 0;background:linear-gradient(180deg,#0ea5a4,#14b8a6);transition:height .3s;min-height:2px}
+.an-trend-val{font-size:.6rem;font-weight:600;color:var(--text)}
+.an-trend-day{font-size:.55rem;color:var(--text-muted)}
+
+/* ── Location table ── */
+.loc-toolbar{display:flex;align-items:center;gap:.5rem;margin-bottom:.65rem;flex-wrap:wrap}
+.loc-search{padding:.3rem .6rem;border:1px solid var(--border);border-radius:var(--radius);font-size:.75rem;background:var(--surface);color:var(--text);flex:1;min-width:140px;max-width:280px}
+.loc-sort{padding:.3rem .5rem;border:1px solid var(--border);border-radius:var(--radius);font-size:.72rem;background:var(--surface);color:var(--text)}
+.loc-tbl{width:100%;border-collapse:collapse;font-size:.78rem}
+.loc-tbl th{text-align:left;padding:.4rem .5rem;color:var(--text-muted);border-bottom:1px solid var(--border);font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.03em;cursor:pointer;user-select:none}
+.loc-tbl th:hover{color:var(--primary)}
+.loc-tbl th .sort-arrow{font-size:.6rem;margin-left:.2rem}
+.loc-tbl td{padding:.4rem .5rem;border-bottom:1px solid var(--border-light);vertical-align:middle}
+.loc-tbl tr:last-child td{border-bottom:none}
+.comp-bar{width:70px;height:7px;background:var(--border-light);border-radius:var(--radius-sm);overflow:hidden;display:inline-block;vertical-align:middle;margin-right:.35rem}
+.comp-fill{height:100%;border-radius:var(--radius-sm);transition:width .3s}
+
+/* ── Ticket donut / stats ── */
+.ticket-stats{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+.ticket-stat{display:flex;align-items:center;gap:.5rem}
+.ticket-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.ticket-info{font-size:.78rem;color:var(--text)}
+.ticket-info b{font-weight:600}
+
+/* ── Perf bars (horizontal) ── */
+.an-perf{display:flex;flex-direction:column;gap:.35rem}
+.an-perf-row{display:flex;align-items:center;gap:.5rem}
+.an-perf-name{font-size:.78rem;font-weight:500;min-width:90px;max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.an-perf-bar{flex:1;height:22px;background:var(--bg);border-radius:var(--radius);overflow:hidden;position:relative}
+.an-perf-fill{height:100%;border-radius:var(--radius);display:flex;align-items:center;padding:0 .5rem;min-width:fit-content;transition:width .4s}
+.an-perf-fill.worker{background:linear-gradient(90deg,#6366f1,#818cf8)}
+.an-perf-fill.supervisor{background:linear-gradient(90deg,#8b5cf6,#a78bfa)}
+.an-perf-lbl{font-size:.65rem;font-weight:600;color:#fff;white-space:nowrap}
+.an-perf-meta{font-size:.65rem;color:var(--text-muted);min-width:80px;text-align:right;display:flex;gap:.35rem;justify-content:flex-end;flex-wrap:wrap}
+
+/* ── Empty state ── */
+.an-empty{text-align:center;padding:2rem 1rem;color:var(--text-muted);font-size:.85rem}
+
+/* ── Issue type badges ── */
+.it-bar{display:flex;align-items:center;gap:.5rem;margin-bottom:.3rem}
+.it-label{font-size:.75rem;min-width:100px;color:var(--text)}
+.it-track{flex:1;height:8px;background:var(--border-light);border-radius:var(--radius-sm);overflow:hidden}
+.it-fill{height:100%;border-radius:var(--radius-sm);background:#f59e0b}
+.it-count{font-size:.72rem;font-weight:600;color:var(--text);min-width:24px;text-align:right}
+
+@media(max-width:1024px){
+  .an-grid-2{grid-template-columns:1fr}
+}
+@media(max-width:768px){
+  .sum-grid{grid-template-columns:repeat(2,1fr)}
+  .ticket-stats{grid-template-columns:1fr}
+  .shift-bars{height:100px}
+  .an-perf-name{min-width:70px;max-width:100px;font-size:.72rem}
+  .an-perf-meta{min-width:60px}
+  .period-info{margin-left:0;width:100%}
+}
+@media(max-width:480px){
+  .sum-grid{grid-template-columns:repeat(2,1fr);gap:.4rem}
+  .sum-card{padding:.65rem .7rem}
+  .sum-val{font-size:1.2rem}
+  .an-section{padding:.85rem}
+  .period-bar{gap:.35rem}
+  .period-btn{padding:.3rem .5rem;font-size:.72rem}
+  .an-trend{height:100px}
+  .an-perf-name{min-width:60px;max-width:80px;font-size:.68rem}
+  .it-label{min-width:70px;font-size:.68rem}
+  .loc-toolbar{flex-direction:column;align-items:stretch}
+  .loc-search{max-width:none}
+}
+@media(prefers-reduced-motion:reduce){
+  .an-trend-fill,.shift-bar-fill,.comp-fill,.an-perf-fill{transition:none !important}
+  .skeleton{animation:none !important}
+}
+</style>
+</head>
+<body>
+<nav class="topbar">
+  <div class="topbar-left">
+    <button class="nav-toggle" id="nav-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg></button>
+    <span class="topbar-brand">Housekeeping</span>
+    <div class="topbar-nav" id="topbar-nav"></div>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-user" id="userName"></span>
+    <button class="btn btn-sm btn-ghost" onclick="App.logout()">Logout</button>
+  </div>
+</nav>
+<div class="sa-banner" id="sa-banner"></div>
+
+<main class="container">
+  <!-- Period Selector -->
+  <div class="period-bar" id="periodBar">
+    <button class="period-btn active" data-period="today">Today</button>
+    <button class="period-btn" data-period="yesterday">Yesterday</button>
+    <button class="period-btn" data-period="week">This Week</button>
+    <button class="period-btn" data-period="last7">Last 7 Days</button>
+    <button class="period-btn" data-period="month">This Month</button>
+    <button class="period-btn" data-period="last30">Last 30 Days</button>
+    <button class="period-btn" data-period="year">This Year</button>
+    <div class="period-custom">
+      <input type="date" id="fromDate">
+      <span class="period-label">to</span>
+      <input type="date" id="toDate">
+      <button class="period-btn" id="customBtn" data-period="custom">Go</button>
+    </div>
+    <div class="period-info">
+      <span id="periodLabel"></span>
+      <span id="lastRefresh"></span>
+    </div>
+  </div>
+
+  <!-- Summary -->
+  <div class="sum-grid" id="sumGrid"></div>
+
+  <!-- Row 1: Trend + Shift breakdown -->
+  <div class="an-grid-2">
+    <div class="an-section">
+      <div class="an-title">Cleaning Trend</div>
+      <div id="trendChart"></div>
+    </div>
+    <div class="an-section">
+      <div class="an-title">By Shift</div>
+      <div id="shiftChart"></div>
+    </div>
+  </div>
+
+  <!-- Location Breakdown -->
+  <div class="an-section">
+    <div class="an-title">Location Breakdown <span id="locCount" style="font-size:.7rem;font-weight:400;color:var(--text-muted)"></span></div>
+    <div id="locToolbar"></div>
+    <div style="max-height:400px;overflow-y:auto" id="locTable"></div>
+  </div>
+
+  <!-- Row 2: Tickets + Issue Types -->
+  <div class="an-grid-2">
+    <div class="an-section">
+      <div class="an-title">Ticket Overview</div>
+      <div id="ticketStats"></div>
+    </div>
+    <div class="an-section">
+      <div class="an-title">Ticket Issue Types</div>
+      <div id="issueTypes"></div>
+    </div>
+  </div>
+
+  <!-- Ticket Hotspots -->
+  <div class="an-section">
+    <div class="an-title">Ticket Hotspots (by Location)</div>
+    <div id="ticketLocations"></div>
+  </div>
+
+  <!-- Row 3: Worker + Supervisor Performance -->
+  <div class="an-grid-2">
+    <div class="an-section">
+      <div class="an-title">Top Workers <span style="font-size:.68rem;font-weight:400;color:var(--text-muted);margin-left:auto">by cleaning count</span></div>
+      <div id="workerPerf"></div>
+    </div>
+    <div class="an-section">
+      <div class="an-title">Top Supervisors <span style="font-size:.68rem;font-weight:400;color:var(--text-muted);margin-left:auto">by verifications</span></div>
+      <div id="supPerf"></div>
+    </div>
+  </div>
+</main>
+
+<script src="/js/app.js"></script>
+<script src="/js/custom-select.js"></script>
+<script>
+if (!App.initAdmin('analytics')) throw '';
+App.initNotifications(App.apiFetch);
+var esc = App.esc, $ = App.$;
+
+// ── Period helpers ──
+function getToday() { var d = new Date(); return d.toISOString().split('T')[0]; }
+function getYesterday() { var d = new Date(); d.setDate(d.getDate()-1); return d.toISOString().split('T')[0]; }
+function getWeekStart() { var d = new Date(); d.setDate(d.getDate()-d.getDay()+1); return d.toISOString().split('T')[0]; }
+function getDaysAgo(n) { var d = new Date(); d.setDate(d.getDate()-(n-1)); return d.toISOString().split('T')[0]; }
+function getMonthStart() { var d = new Date(); return d.getFullYear()+'-'+(d.getMonth()+1+'').padStart(2,'0')+'-01'; }
+function getYearStart() { return new Date().getFullYear()+'-01-01'; }
+
+var periods = {
+  today: function() { return [getToday(), getToday()]; },
+  yesterday: function() { return [getYesterday(), getYesterday()]; },
+  week: function() { return [getWeekStart(), getToday()]; },
+  last7: function() { return [getDaysAgo(7), getToday()]; },
+  month: function() { return [getMonthStart(), getToday()]; },
+  last30: function() { return [getDaysAgo(30), getToday()]; },
+  year: function() { return [getYearStart(), getToday()]; }
+};
+
+var currentPeriod = 'today';
+var _reportData = null; // cached for location sort/search
+
+// ── Period bar events ──
+$('periodBar').addEventListener('click', function(e) {
+  var btn = e.target.closest('.period-btn');
+  if (!btn) return;
+  var p = btn.dataset.period;
+  if (p === 'custom') {
+    var f = $('fromDate').value, t = $('toDate').value;
+    if (!f || !t) { App.toast('Select both dates', 'warning'); return; }
+    if (f > t) { App.toast('From date must be before To date', 'warning'); return; }
+    currentPeriod = 'custom';
+    setActive(btn);
+    loadReport(f, t);
+  } else if (periods[p]) {
+    currentPeriod = p;
+    setActive(btn);
+    var range = periods[p]();
+    loadReport(range[0], range[1]);
+  }
+});
+
+function setActive(btn) {
+  var all = $('periodBar').querySelectorAll('.period-btn');
+  for (var i = 0; i < all.length; i++) all[i].classList.remove('active');
+  btn.classList.add('active');
+}
+
+// ── Section error handler ──
+function sectionError(elId, msg) {
+  var el = $(elId);
+  if (el) el.innerHTML = '<div class="an-error">⚠ ' + (msg || 'Failed to load') + '</div>';
+}
+
+// ── Main data loader ──
+async function loadReport(from, to) {
+  // Show loading
+  $('sumGrid').innerHTML = '<div class="skeleton" style="height:70px;grid-column:1/-1;border-radius:10px"></div>'.repeat(3);
+  App.showSkeleton('trendChart');
+  App.showSkeleton('shiftChart');
+  $('locToolbar').innerHTML = '';
+  App.showSkeleton('locTable');
+  App.showSkeleton('ticketStats');
+  App.showSkeleton('issueTypes');
+  App.showSkeleton('ticketLocations');
+  App.showSkeleton('workerPerf');
+  App.showSkeleton('supPerf');
+
+  var data = await App.apiFetchJson('/analytics/report?from=' + from + '&to=' + to);
+  if (!data) {
+    sectionError('sumGrid', 'Failed to load analytics. Please try again.');
+    ['trendChart','shiftChart','locTable','ticketStats','issueTypes','ticketLocations','workerPerf','supPerf'].forEach(function(id) { sectionError(id, 'No data'); });
+    return;
+  }
+
+  _reportData = data;
+
+  // Period label
+  var pl = $('periodLabel');
+  if (pl) {
+    var days = data.period.days;
+    pl.textContent = data.period.from === data.period.to ? data.period.from : data.period.from + ' → ' + data.period.to + ' (' + days + ' day' + (days > 1 ? 's' : '') + ')';
+  }
+  var lr = $('lastRefresh');
+  if (lr) lr.textContent = 'Updated ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+
+  renderSummary(data.summary);
+  renderTrend(data.trend, data.period.days);
+  renderShifts(data.byShift, data.summary.totalRecords);
+  renderLocations(data.locationBreakdown);
+  renderTicketStats(data.ticketStats);
+  renderIssueTypes(data.ticketStats);
+  renderTicketLocations(data.ticketStats.topLocations);
+  renderWorkers(data.topWorkers);
+  renderSupervisors(data.topSupervisors);
+}
+
+// ── Renderers ──
+function renderSummary(s) {
+  function card(cls, val, label, change, sub) {
+    var changeHtml = '';
+    if (change !== null && change !== undefined) {
+      var changeCls = change > 0 ? 'up' : change < 0 ? 'down' : 'flat';
+      var changeText = change > 0 ? '↑ ' + change + '% vs prev' : change < 0 ? '↓ ' + Math.abs(change) + '% vs prev' : 'Same as prev';
+      changeHtml = '<div class="sum-change ' + changeCls + '">' + changeText + '</div>';
+    }
+    if (sub) changeHtml += '<div class="sum-change flat">' + sub + '</div>';
+    return '<div class="sum-card ' + cls + '">' +
+      '<div class="sum-label">' + label + '</div>' +
+      '<div class="sum-val">' + val + '</div>' +
+      changeHtml +
+    '</div>';
+  }
+  var ticketChange = s.prevTickets > 0 ? Math.round((s.totalTickets - s.prevTickets) / s.prevTickets * 100) : (s.totalTickets > 0 ? 100 : 0);
+  var flagSub = s.flaggedRate > 0 ? s.flaggedRate + '% flagged rate' : '';
+  var compVal = s.overallCompletionRate != null ? s.overallCompletionRate + '%' : '—';
+  var compSub = s.overallCompletionRate != null ? (s.overallCompletionRate >= 80 ? 'On track ✓' : s.overallCompletionRate >= 50 ? 'Needs attention' : 'Behind schedule') : 'No schedules';
+
+  $('sumGrid').innerHTML =
+    card('sc-clean', s.totalRecords, 'Cleaning Records', s.changePercent, null) +
+    card('sc-flag', s.flaggedRecords, 'Flagged Records', null, flagSub) +
+    card('sc-ticket', s.totalTickets, 'Tickets Raised', ticketChange, null) +
+    card('sc-photo', s.totalImages, 'Photos Taken', null, null) +
+    card('sc-comp', compVal, 'Completion Rate', null, compSub) +
+    card('sc-avg', s.avgPerDay, 'Avg / Day', null, s.totalLocations + ' rooms · ' + s.totalWorkers + 'W / ' + s.totalSupervisors + 'S');
+}
+
+function renderTrend(trend, periodDays) {
+  if (!trend || !trend.length) { $('trendChart').innerHTML = '<div class="an-empty">No data</div>'; return; }
+
+  // For long periods, aggregate to weekly buckets
+  var displayTrend = trend;
+  var aggLabel = '';
+  if (periodDays > 60) {
+    // Aggregate by week
+    var weekBuckets = [];
+    var bucket = null;
+    for (var i = 0; i < trend.length; i++) {
+      var dow = new Date(trend[i].date + 'T12:00:00').getDay();
+      if (dow === 1 || !bucket) { // Monday starts new week
+        if (bucket) weekBuckets.push(bucket);
+        bucket = { date: trend[i].date, count: 0, days: 0 };
+      }
+      bucket.count += trend[i].count;
+      bucket.days++;
+    }
+    if (bucket) weekBuckets.push(bucket);
+    displayTrend = weekBuckets;
+    aggLabel = ' (weekly)';
+  }
+
+  var max = Math.max.apply(null, displayTrend.map(function(d) { return d.count; }).concat([1]));
+  var total = displayTrend.reduce(function(s, d) { return s + d.count; }, 0);
+  var labelStep = displayTrend.length > 14 ? Math.ceil(displayTrend.length / 10) : 1;
+  var totalLabel = '<div style="font-size:.68rem;color:var(--text-muted);margin-bottom:.3rem">Total: <b style="color:var(--text)">' + total + '</b>' + aggLabel + '</div>';
+
+  $('trendChart').innerHTML = totalLabel + '<div class="an-trend">' + displayTrend.map(function(d, idx) {
+    var pct = Math.max(Math.round(d.count / max * 100), d.count > 0 ? 6 : 1);
+    var dt = new Date(d.date + 'T12:00:00');
+    var label = '';
+    if (idx % labelStep === 0) {
+      label = periodDays > 60 ? 'W' + Math.ceil((idx + 1)) : dt.toLocaleDateString(undefined, {month:'short',day:'numeric'});
+    }
+    return '<div class="an-trend-col">' +
+      '<div class="an-trend-val">' + (d.count > 0 ? d.count : '') + '</div>' +
+      '<div class="an-trend-fill" style="height:' + pct + '%"></div>' +
+      '<div class="an-trend-day">' + label + '</div></div>';
+  }).join('') + '</div>';
+}
+
+function renderShifts(byShift, total) {
+  var shifts = ['MORNING', 'AFTERNOON', 'NIGHT', 'GENERAL'];
+  var cls = { MORNING: 'morning', AFTERNOON: 'afternoon', NIGHT: 'night', GENERAL: 'general' };
+  var max = 1;
+  for (var i = 0; i < shifts.length; i++) max = Math.max(max, byShift[shifts[i]] || 0);
+  if (total === 0) { $('shiftChart').innerHTML = '<div class="an-empty">No cleaning records</div>'; return; }
+  $('shiftChart').innerHTML = '<div class="shift-bars">' + shifts.map(function(s) {
+    var count = byShift[s] || 0;
+    var pct = Math.max(Math.round(count / max * 100), count > 0 ? 8 : 2);
+    var pctLabel = total > 0 ? Math.round(count / total * 100) + '%' : '';
+    return '<div class="shift-col"><div class="shift-bar-val">' + count + '</div>' +
+      '<div class="shift-bar-pct">' + pctLabel + '</div>' +
+      '<div class="shift-bar-fill ' + cls[s] + '" style="height:' + pct + '%"></div>' +
+      '<div class="shift-bar-label">' + s.charAt(0) + s.slice(1).toLowerCase() + '</div></div>';
+  }).join('') + '</div>';
+}
+
+// ── Location table with search + sort ──
+var _locSort = 'completion-asc';
+var _locSearch = '';
+
+function renderLocations(locs) {
+  if (!locs || !locs.length) { $('locTable').innerHTML = '<div class="an-empty">No locations</div>'; $('locToolbar').innerHTML = ''; return; }
+
+  // Toolbar
+  $('locToolbar').innerHTML = '<div class="loc-toolbar">' +
+    '<input type="text" class="loc-search" id="locSearchInput" placeholder="Search locations..." value="' + esc(_locSearch) + '">' +
+    '<select class="form-select loc-sort" id="locSortSelect">' +
+      '<option value="completion-asc"' + (_locSort === 'completion-asc' ? ' selected' : '') + '>Worst completion first</option>' +
+      '<option value="completion-desc"' + (_locSort === 'completion-desc' ? ' selected' : '') + '>Best completion first</option>' +
+      '<option value="cleaned-desc"' + (_locSort === 'cleaned-desc' ? ' selected' : '') + '>Most cleaned</option>' +
+      '<option value="tickets-desc"' + (_locSort === 'tickets-desc' ? ' selected' : '') + '>Most tickets</option>' +
+      '<option value="name-asc"' + (_locSort === 'name-asc' ? ' selected' : '') + '>Name A→Z</option>' +
+    '</select></div>';
+
+  // Event listeners
+  $('locSearchInput').addEventListener('input', function() { _locSearch = this.value; renderLocTable(locs); });
+  $('locSortSelect').addEventListener('change', function() { _locSort = this.value; renderLocTable(locs); });
+  if (window._initCustomSelects) _initCustomSelects();
+
+  renderLocTable(locs);
+}
+
+function renderLocTable(locs) {
+  // Filter
+  var filtered = locs;
+  if (_locSearch) {
+    var q = _locSearch.toLowerCase();
+    filtered = locs.filter(function(l) {
+      return l.name.toLowerCase().indexOf(q) !== -1 || (l.parentName && l.parentName.toLowerCase().indexOf(q) !== -1) || l.type.toLowerCase().indexOf(q) !== -1;
+    });
+  }
+
+  // Only show locations with schedules or activity (unless searching)
+  if (!_locSearch) {
+    var active = filtered.filter(function(l) { return l.hasSchedule || l.cleaned > 0 || l.tickets > 0; });
+    if (active.length > 0) filtered = active;
+  }
+
+  // Sort
+  var sortFn;
+  switch (_locSort) {
+    case 'completion-desc': sortFn = function(a, b) { return (b.completionRate ?? -1) - (a.completionRate ?? -1); }; break;
+    case 'cleaned-desc': sortFn = function(a, b) { return b.cleaned - a.cleaned; }; break;
+    case 'tickets-desc': sortFn = function(a, b) { return b.tickets - a.tickets || b.cleaned - a.cleaned; }; break;
+    case 'name-asc': sortFn = function(a, b) { return a.name.localeCompare(b.name); }; break;
+    default: sortFn = function(a, b) { return (a.completionRate ?? 999) - (b.completionRate ?? 999); };
+  }
+  filtered = filtered.slice().sort(sortFn);
+
+  $('locCount').textContent = filtered.length + ' of ' + locs.length + ' rooms';
+
+  if (!filtered.length) { $('locTable').innerHTML = '<div class="an-empty">No matching locations</div>'; return; }
+
+  var html = '<table class="loc-tbl"><thead><tr><th>Location</th><th>Cleaned</th><th>Expected</th><th>Completion</th><th>Tickets</th></tr></thead><tbody>';
+  var shown = Math.min(filtered.length, 100);
+  for (var i = 0; i < shown; i++) {
+    var l = filtered[i];
+    var rate = l.completionRate;
+    var color = rate === null ? '#cbd5e1' : rate >= 80 ? '#10b981' : rate >= 50 ? '#f59e0b' : '#ef4444';
+    var rateText = rate !== null ? rate + '%' : '—';
+    var parent = l.parentName ? esc(l.parentName) + ' → ' : '';
+    html += '<tr><td>' + parent + esc(l.name) + '<br><span style="font-size:.65rem;color:var(--text-light)">' + l.type.replace('_',' ') + '</span></td>' +
+      '<td>' + l.cleaned + '</td><td>' + l.expected + '</td>' +
+      '<td><div class="comp-bar"><div class="comp-fill" style="width:' + (rate || 0) + '%;background:' + color + '"></div></div><span style="font-size:.72rem;font-weight:600;color:' + color + '">' + rateText + '</span></td>' +
+      '<td>' + (l.tickets > 0 ? '<span style="color:var(--danger);font-weight:600">' + l.tickets + '</span>' : '0') + '</td></tr>';
+  }
+  html += '</tbody></table>';
+  if (filtered.length > shown) html += '<div style="text-align:center;padding:.4rem;font-size:.72rem;color:var(--text-muted)">Showing ' + shown + ' of ' + filtered.length + '</div>';
+  $('locTable').innerHTML = html;
+}
+
+function renderTicketStats(ts) {
+  if (ts.total === 0) { $('ticketStats').innerHTML = '<div class="an-empty">No tickets in this period</div>'; return; }
+  var prColors = { URGENT: '#ef4444', HIGH: '#f97316', NORMAL: '#3b82f6', LOW: '#94a3b8' };
+  var stColors = { OPEN: '#ef4444', IN_PROGRESS: '#f59e0b', RESOLVED: '#10b981', CLOSED: '#6b7280' };
+  var html = '<div class="ticket-stats">';
+  for (var p in prColors) {
+    var cnt = ts.byPriority[p] || 0;
+    if (cnt > 0) html += '<div class="ticket-stat"><div class="ticket-dot" style="background:' + prColors[p] + '"></div><div class="ticket-info"><b>' + cnt + '</b> ' + p + '</div></div>';
+  }
+  for (var s in stColors) {
+    var cnt2 = ts.byStatus[s] || 0;
+    if (cnt2 > 0) html += '<div class="ticket-stat"><div class="ticket-dot" style="background:' + stColors[s] + '"></div><div class="ticket-info"><b>' + cnt2 + '</b> ' + s.replace('_',' ') + '</div></div>';
+  }
+  html += '</div>';
+  html += '<div style="margin-top:.75rem;font-size:.78rem;color:var(--text-muted);display:flex;gap:1.25rem;flex-wrap:wrap">';
+  html += '<span>Internal: <b style="color:var(--text)">' + (ts.bySource.INTERNAL || 0) + '</b></span>';
+  html += '<span>Public QR: <b style="color:var(--text)">' + (ts.bySource.PUBLIC || 0) + '</b></span>';
+  if (ts.resolved > 0) html += '<span>Resolved: <b style="color:var(--text)">' + ts.resolved + '</b></span>';
+  if (ts.avgResolutionHours) html += '<span>Avg resolve: <b style="color:var(--text)">' + ts.avgResolutionHours + 'h</b></span>';
+  html += '</div>';
+  $('ticketStats').innerHTML = html;
+}
+
+function renderIssueTypes(ts) {
+  if (!ts.byIssueType || Object.keys(ts.byIssueType).length === 0) {
+    $('issueTypes').innerHTML = '<div class="an-empty">No issue types recorded</div>';
+    return;
+  }
+  var LABELS = { NOT_CLEAN:'Not Clean', BAD_SMELL:'Bad Smell', BROKEN_EQUIPMENT:'Broken Equipment', WATER_ISSUE:'Water Issue', PEST:'Pest Problem', LINEN:'Linen Issue', WASTE:'Waste Issue', OTHER:'Other' };
+  var items = Object.entries(ts.byIssueType).sort(function(a,b) { return b[1]-a[1]; });
+  var max = items[0][1];
+  var html = '';
+  for (var i = 0; i < items.length; i++) {
+    var pct = Math.round(items[i][1] / max * 100);
+    html += '<div class="it-bar"><span class="it-label">' + (LABELS[items[i][0]] || items[i][0]) + '</span><div class="it-track"><div class="it-fill" style="width:' + pct + '%"></div></div><span class="it-count">' + items[i][1] + '</span></div>';
+  }
+  $('issueTypes').innerHTML = html;
+}
+
+function renderTicketLocations(locs) {
+  if (!locs || !locs.length) { $('ticketLocations').innerHTML = '<div class="an-empty">No ticket hotspots</div>'; return; }
+  var max = locs[0].count;
+  var html = '';
+  for (var i = 0; i < locs.length; i++) {
+    var pct = Math.round(locs[i].count / max * 100);
+    html += '<div class="it-bar"><span class="it-label">' + esc(locs[i].name) + '</span><div class="it-track"><div class="it-fill" style="width:' + pct + '%;background:#f87171"></div></div><span class="it-count">' + locs[i].count + '</span></div>';
+  }
+  $('ticketLocations').innerHTML = html;
+}
+
+function renderWorkers(workers) {
+  if (!workers || !workers.length) { $('workerPerf').innerHTML = '<div class="an-empty">No worker activity</div>'; return; }
+  var max = workers[0].records || 1;
+  var html = '<div class="an-perf">';
+  for (var i = 0; i < workers.length; i++) {
+    var w = workers[i];
+    var pct = Math.max(Math.round(w.records / max * 100), 5);
+    var meta = '';
+    if (w.flagged > 0) meta += '<span style="color:var(--danger)">' + w.flagged + ' flagged (' + w.flaggedRate + '%)</span>';
+    if (w.images > 0) meta += (meta ? ' · ' : '') + '<span>' + w.images + ' 📷</span>';
+    html += '<div class="an-perf-row"><div class="an-perf-name" title="' + esc(w.name) + '">' + esc(w.name) + '</div>' +
+      '<div class="an-perf-bar"><div class="an-perf-fill worker" style="width:' + pct + '%"><span class="an-perf-lbl">' + w.records + '</span></div></div>' +
+      '<div class="an-perf-meta">' + meta + '</div></div>';
+  }
+  html += '</div>';
+  $('workerPerf').innerHTML = html;
+}
+
+function renderSupervisors(sups) {
+  if (!sups || !sups.length) { $('supPerf').innerHTML = '<div class="an-empty">No supervisor activity</div>'; return; }
+  var max = sups[0].records || 1;
+  var html = '<div class="an-perf">';
+  for (var i = 0; i < sups.length; i++) {
+    var s = sups[i];
+    var pct = Math.max(Math.round(s.records / max * 100), 5);
+    var meta = '';
+    if (s.flagged > 0) meta += '<span style="color:var(--danger)">' + s.flagged + ' flagged (' + s.flaggedRate + '%)</span>';
+    html += '<div class="an-perf-row"><div class="an-perf-name" title="' + esc(s.name) + '">' + esc(s.name) + '</div>' +
+      '<div class="an-perf-bar"><div class="an-perf-fill supervisor" style="width:' + pct + '%"><span class="an-perf-lbl">' + s.records + '</span></div></div>' +
+      '<div class="an-perf-meta">' + meta + '</div></div>';
+  }
+  html += '</div>';
+  $('supPerf').innerHTML = html;
+}
+
+// ── Initial load ──
+var init = periods.today();
+loadReport(init[0], init[1]);
+</script>
+</body>
+</html>

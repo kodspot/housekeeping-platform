@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="manifest" href="/site.webmanifest">
+<title>Admin Login — Housekeeping</title>
+<link rel="stylesheet" href="/css/design-system.css">
+</head>
+<body class="auth-layout">
+<div class="auth-card">
+  <h1 class="auth-title">Housekeeping</h1>
+  <p class="auth-subtitle">Admin — Sign in to manage your facility</p>
+  <div id="error" class="error-msg"></div>
+
+  <form id="loginForm">
+    <div class="form-group">
+      <label class="form-label" for="email">Email</label>
+      <input class="form-input" type="email" id="email" required autocomplete="email" placeholder="admin@facility.com">
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="password">Password</label>
+      <input class="form-input" type="password" id="password" required autocomplete="current-password" placeholder="••••••••">
+    </div>
+    <div id="orgSelect" style="display:none" class="form-group">
+      <label class="form-label" for="orgId">Select Organization</label>
+      <select class="form-select" id="orgId"></select>
+    </div>
+    <button type="submit" class="btn btn-primary btn-block" id="btn">Sign In</button>
+  </form>
+
+  <p style="margin-top:var(--sp-lg);font-size:.8rem;color:var(--text-light);text-align:center">
+    <a href="/" style="color:var(--primary)">&larr; Back to Home</a>
+  </p>
+</div>
+
+<script src="/js/app.js"></script>
+<script src="/js/custom-select.js"></script>
+<script>
+var $ = App.$;
+
+function showErr(msg) { $('error').textContent = msg; $('error').style.display = 'block'; }
+function hideErr() { $('error').style.display = 'none'; }
+
+$('loginForm').addEventListener('submit', async function(e) {
+  e.preventDefault(); hideErr();
+  var btn = $('btn'); btn.disabled = true; btn.textContent = 'Signing in...';
+  try {
+    var body = { email: $('email').value, password: $('password').value };
+    var orgId = $('orgId').value;
+    if (orgId) body.orgId = orgId;
+    var res = await fetch('/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    var data = await res.json();
+    if (res.status === 400 && data.organizations) {
+      $('orgSelect').style.display = 'block';
+      var sel = $('orgId');
+      sel.innerHTML = data.organizations.map(function(o) { return '<option value="' + o.orgId + '">' + o.role + ' — ' + o.orgId.slice(0, 8) + '</option>'; }).join('');
+      showErr('Multiple accounts found. Select an organization.');
+      return;
+    }
+    if (!res.ok) { showErr(data.error || 'Login failed'); return; }
+    if (!data.token || !data.user) { showErr('Invalid server response'); return; }
+    if (data.user.role !== 'ADMIN') {
+      showErr('This login is for organization admins only.'); return;
+    }
+    sessionStorage.setItem('token', data.token);
+    sessionStorage.setItem('user', JSON.stringify(data.user));
+    location.href = '/admin-dashboard';
+  } catch (err) { showErr('Network error. Please try again.'); }
+  finally { btn.disabled = false; btn.textContent = 'Sign In'; }
+});
+
+// Redirect if already logged in as ADMIN
+if (sessionStorage.getItem('token')) {
+  var u = JSON.parse(sessionStorage.getItem('user') || '{}');
+  if (u.role === 'ADMIN') location.href = '/admin-dashboard';
+}
+</script>
+</body>
+</html>

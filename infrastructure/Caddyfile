@@ -1,0 +1,33 @@
+# Production — automatic HTTPS via Let's Encrypt
+{$DOMAIN:kodspot.in} {
+    reverse_proxy api:3000 {
+        header_up Host {host}
+        header_up X-Real-IP {remote}
+        header_up X-Forwarded-For {remote}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    encode gzip
+
+    # No-cache for admin / supervisor pages (security-sensitive)
+    header /admin* Cache-Control "no-cache, no-store, must-revalidate"
+    header /superadmin* Cache-Control "no-cache, no-store, must-revalidate"
+    header /supervisor* Cache-Control "no-cache, no-store, must-revalidate"
+
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "accelerometer=(), camera=(self), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), usb=()"
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' blob: data: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
+        -Server
+    }
+}
+
+# Redirect www to naked domain
+www.{$DOMAIN:kodspot.in} {
+    redir https://{$DOMAIN:kodspot.in}{uri} permanent
+}

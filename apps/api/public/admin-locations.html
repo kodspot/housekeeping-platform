@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="manifest" href="/site.webmanifest">
+<title>Locations — Housekeeping Admin</title>
+<link rel="stylesheet" href="/css/design-system.css">
+<style>
+/* ── Location Tree ── */
+.loc-tree{margin-top:.25rem}
+.loc-summary{display:flex;gap:1rem;flex-wrap:wrap;padding:.6rem 0 .25rem;border-bottom:1px solid var(--border-light);margin-bottom:.5rem}
+.loc-summary-item{font-size:.78rem;color:var(--text-muted)}
+.loc-summary-item b{color:var(--text);font-weight:700}
+.loc-summary-item.warn b{color:#d97706}
+
+/* Search bar */
+.loc-search-bar{display:flex;align-items:center;gap:.5rem;margin-bottom:.65rem}
+.loc-search{flex:1;padding:.4rem .7rem;border:1px solid var(--border);border-radius:var(--radius);font-size:.82rem;background:var(--surface);color:var(--text);max-width:340px}
+.loc-search::placeholder{color:var(--text-light)}
+.loc-search-count{font-size:.72rem;color:var(--text-muted)}
+
+/* Container: BUILDING / FLOOR */
+.loc-group{margin-bottom:2px}
+.loc-group-header{
+  display:flex;align-items:center;justify-content:space-between;gap:.75rem;
+  padding:.65rem 1rem;border-radius:var(--radius-lg);transition:background .15s;position:relative;cursor:pointer
+}
+.loc-group-header:hover{background:var(--bg)}
+.loc-group-left{display:flex;align-items:center;gap:.6rem;min-width:0;overflow:hidden}
+.loc-group-icon{
+  width:34px;height:34px;border-radius:var(--radius-lg);display:flex;align-items:center;justify-content:center;
+  font-size:1rem;flex-shrink:0;font-weight:600
+}
+.loc-group-icon.building{background:#eff6ff;color:#3b82f6}
+.loc-group-icon.floor{background:#f5f3ff;color:#8b5cf6}
+.loc-group-title{min-width:0;overflow:hidden}
+.loc-group-name{font-weight:600;font-size:.92rem;color:var(--text);line-height:1.2;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.loc-group-sub{font-size:.7rem;color:var(--text-muted);margin-top:1px}
+.loc-group-right{display:flex;align-items:center;gap:.5rem;flex-shrink:0}
+.loc-group-pills{display:flex;gap:.3rem}
+.pill{font-size:.65rem;padding:.15rem .5rem;border-radius:99px;font-weight:500;white-space:nowrap}
+.pill-rooms{background:#f0fdf4;color:#16a34a}
+.pill-cleans{background:#eff6ff;color:#2563eb}
+.pill-tickets{background:#fef3c7;color:#d97706}
+.pill-tickets.has-tickets{background:#fde68a;color:#92400e;font-weight:600}
+
+/* Collapse/Expand chevron */
+.collapse-chevron{width:18px;height:18px;transition:transform .2s;flex-shrink:0;color:var(--text-light)}
+.loc-group.collapsed .collapse-chevron{transform:rotate(-90deg)}
+.loc-group.collapsed>.loc-group-children{display:none}
+
+/* Children indent */
+.loc-group-children{padding-left:1rem;margin-left:1rem;border-left:2px solid #e5e7eb}
+.loc-group-children .loc-group-children{border-left-color:#ede9fe}
+
+/* Room cards */
+.room-card{
+  display:flex;align-items:center;justify-content:space-between;gap:.75rem;
+  padding:.5rem .85rem;border-radius:var(--radius-lg);border:1px solid transparent;
+  background:var(--surface);transition:all .15s ease
+}
+.room-card:hover{background:#f8fffe;border-color:#d1fae5;box-shadow:var(--shadow-sm)}
+.room-left{display:flex;align-items:center;gap:.65rem;min-width:0;flex:1;overflow:hidden}
+.room-icon{
+  width:36px;height:36px;border-radius:var(--radius-lg);display:flex;align-items:center;justify-content:center;
+  font-size:1rem;flex-shrink:0;background:#f0fdfa;color:#0d9488
+}
+.room-info{min-width:0;flex:1;overflow:hidden}
+.room-name{font-weight:500;font-size:.88rem;color:var(--text);line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.room-meta-row{display:flex;align-items:center;gap:.35rem;margin-top:2px;flex-wrap:wrap}
+.room-type-tag{
+  font-size:.6rem;padding:.1rem .4rem;border-radius:var(--radius-sm);font-weight:600;
+  text-transform:uppercase;letter-spacing:.3px;background:#f1f5f9;color:#64748b
+}
+.sched-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.sched-dot.morning{background:#f59e0b}
+.sched-dot.afternoon{background:#3b82f6}
+.sched-dot.night{background:#6366f1}
+.sched-dot.general{background:#10b981}
+.sched-label{font-size:.6rem;color:var(--text-muted);font-weight:500}
+.badge-nosched{font-size:.55rem;padding:.1rem .35rem;border-radius:99px;font-weight:600;background:#fef3c7;color:#d97706}
+.room-right{display:flex;align-items:center;gap:.3rem;flex-shrink:0}
+.room-stats{display:flex;gap:.6rem;margin-right:.4rem}
+.room-stat{font-size:.72rem;color:var(--text-muted);display:flex;align-items:center;gap:.2rem}
+.room-stat-val{font-weight:600;color:var(--text);min-width:10px}
+
+/* Compact stats on mobile */
+.room-stats-compact{display:none;gap:.4rem;margin-top:2px}
+.room-stats-compact .room-stat{font-size:.62rem}
+
+/* Action buttons */
+.act-btn{
+  width:32px;height:32px;border-radius:var(--radius-lg);border:1px solid #e5e7eb;background:var(--surface);
+  display:inline-flex;align-items:center;justify-content:center;cursor:pointer;
+  transition:all .15s ease;color:#94a3b8;padding:0
+}
+.act-btn:hover{transform:translateY(-1px);box-shadow:0 2px 6px rgba(0,0,0,.06)}
+.act-btn svg{width:14px;height:14px;stroke-width:1.8}
+.act-btn.act-edit:hover{border-color:#3b82f6;color:#3b82f6;background:#eff6ff}
+.act-btn.act-schedule:hover{border-color:#10b981;color:#10b981;background:#f0fdf4}
+.act-btn.act-qr:hover{border-color:#8b5cf6;color:#8b5cf6;background:#f5f3ff}
+.act-btn.act-delete:hover{border-color:#ef4444;color:#ef4444;background:#fef2f2}
+.act-btn.act-activate{border-color:#10b981;color:#10b981;background:#f0fdf4}
+.act-btn.act-activate:hover{background:#dcfce7;color:#059669;box-shadow:0 2px 6px rgba(16,185,129,.15)}
+
+/* Inactive / Badge */
+.loc-inactive{opacity:.55}
+.badge-inactive{font-size:.58rem;padding:.1rem .35rem;border-radius:99px;font-weight:600;background:#fee2e2;color:#dc2626;margin-left:.3rem}
+
+/* QR Modal */
+.qr-modal-inner{text-align:center;padding:.75rem 0 0}
+.qr-modal-inner svg{max-width:200px;max-height:200px;margin:0 auto;display:block}
+.qr-code-display{
+  font-family:'Courier New',monospace;font-size:1.4rem;font-weight:700;
+  color:var(--primary);letter-spacing:2px;margin:.75rem 0 .15rem
+}
+.qr-hint{font-size:.72rem;color:var(--text-muted);margin-bottom:1.25rem}
+.qr-actions{display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap}
+
+/* Empty / Error state */
+.loc-empty{text-align:center;padding:4rem 1rem;color:var(--text-muted)}
+.loc-empty-icon{font-size:3rem;margin-bottom:.75rem;display:block;opacity:.5}
+.loc-empty-text{font-size:.95rem;margin-bottom:.25rem}
+.loc-empty-sub{font-size:.8rem}
+.loc-error{text-align:center;padding:3rem 1rem;color:var(--danger)}
+
+/* Hidden for search */
+.loc-hidden{display:none !important}
+
+@media(max-width:1024px){
+  .room-stats{gap:.4rem}
+  .loc-group-header{gap:.5rem}
+}
+@media(max-width:768px){
+  .room-stats{display:none}
+  .room-stats-compact{display:flex}
+  .loc-group-pills{display:none}
+  .room-card{padding:.45rem .6rem;gap:.5rem}
+  .loc-group-header{padding:.5rem .6rem}
+  .loc-group-children{padding-left:.65rem;margin-left:.65rem}
+}
+@media(max-width:480px){
+  .room-card{padding:.4rem .5rem}
+  .room-icon{width:30px;height:30px;font-size:.7rem}
+  .room-name{font-size:.82rem}
+  .loc-group-icon{width:28px;height:28px;font-size:.85rem}
+  .loc-group-name{font-size:.85rem}
+  .loc-group-children{padding-left:.4rem;margin-left:.4rem}
+  .act-btn{width:36px;height:36px}
+  .qr-code-display{font-size:1.1rem}
+  .loc-search-bar{flex-direction:column;align-items:stretch}
+  .loc-search{max-width:none}
+}
+@media(hover:none) and (pointer:coarse){
+  .act-btn{width:38px;height:38px}
+}
+@media(prefers-reduced-motion:reduce){
+  .collapse-chevron,.room-card,.act-btn,.loc-group-header{transition:none !important}
+  .skeleton{animation:none !important}
+}
+</style>
+</head>
+<body>
+<nav class="topbar">
+  <div class="topbar-left">
+    <button class="nav-toggle" id="nav-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg></button>
+    <span class="topbar-brand">Housekeeping</span>
+    <div class="topbar-nav" id="topbar-nav"></div>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-user" id="userName"></span>
+    <button class="btn btn-sm btn-ghost" onclick="App.logout()">Logout</button>
+  </div>
+</nav>
+<div class="sa-banner" id="sa-banner"></div>
+
+<main class="container">
+  <div class="toolbar">
+    <h2 class="toolbar-title">Locations</h2>
+    <div class="flex items-center gap-sm" style="flex-wrap:wrap">
+      <label class="form-check"><input type="checkbox" id="showInactive" onchange="loadTree()"> Show inactive</label>
+      <button class="btn btn-outline btn-sm" onclick="openQRPrint()" style="display:inline-flex;align-items:center;gap:.35rem"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Print All QR</button>
+      <button class="btn btn-primary" onclick="openAdd()">+ Add Location</button>
+    </div>
+  </div>
+  <div id="searchBar"></div>
+  <div id="treeContainer" class="loc-tree"></div>
+</main>
+
+<!-- Location Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h2 class="modal-title" id="modalTitle">Add Location</h2>
+    <div id="modalError" class="error-msg"></div>
+    <form id="locForm">
+      <input type="hidden" id="locId">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Name</label><input class="form-input" type="text" id="locName" required maxlength="200"></div>
+        <div class="form-group"><label class="form-label">Type</label>
+          <select class="form-select" id="locType" required>
+            <option value="BUILDING">Building</option><option value="FLOOR">Floor</option><option value="ROOM">Room</option>
+            <option value="CORRIDOR">Corridor</option><option value="WASHROOM">Washroom</option><option value="ICU">ICU</option>
+            <option value="LOBBY">Lobby</option><option value="KITCHEN">Kitchen</option><option value="WARD">Ward</option>
+            <option value="MEETING_ROOM">Meeting Room</option><option value="OTHER">Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Parent Location</label><select class="form-select" id="locParent"><option value="">— None (Top Level) —</option></select></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Sort Order</label><input class="form-input" type="number" id="locSort" value="0"></div>
+        <div class="form-group" id="statusGroup" style="display:none"><label class="form-label">Status</label><select class="form-select" id="locActive"><option value="true">Active</option><option value="false">Inactive</option></select></div>
+      </div>
+      <div class="form-group"><label class="form-label">Notes</label><textarea class="form-textarea" id="locNotes" rows="2" maxlength="500"></textarea></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="App.closeModal('modal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- QR Modal -->
+<div class="modal-overlay" id="qrModal">
+  <div class="modal" style="max-width:380px">
+    <h2 class="modal-title" id="qrModalTitle">QR Code</h2>
+    <div class="qr-modal-inner">
+      <div id="qrSvg"></div>
+      <div class="qr-code-display" id="qrCodeText"></div>
+      <div class="qr-hint">Share this code with supervisors for manual entry</div>
+      <div class="qr-actions">
+        <button class="btn btn-primary btn-sm" onclick="downloadQR()">⬇ Download PNG</button>
+        <button class="btn btn-outline btn-sm" onclick="copyCode()">📋 Copy Code</button>
+        <button class="btn btn-outline btn-sm" onclick="App.closeModal('qrModal')">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Schedule Modal -->
+<div class="modal-overlay" id="scheduleModal">
+  <div class="modal">
+    <h2 class="modal-title">Cleaning Schedule</h2>
+    <div id="schedError" class="error-msg"></div>
+    <form id="schedForm">
+      <input type="hidden" id="schedLocId">
+      <p id="schedLocName" class="fw-bold mb-md"></p>
+      <div class="form-group"><label class="form-label">Frequency</label>
+        <select class="form-select" id="schedFreq" required>
+          <option value="ONCE_DAILY">Once Daily</option><option value="TWICE_DAILY">Twice Daily</option>
+          <option value="THRICE_DAILY">Thrice Daily</option><option value="WEEKLY">Weekly</option><option value="CUSTOM">Custom</option>
+        </select>
+      </div>
+      <label class="form-label">Required Shifts</label>
+      <div class="flex gap-sm" style="flex-wrap:wrap;margin:.5rem 0">
+        <label class="form-check"><input type="checkbox" id="sMorning" value="MORNING"> Morning</label>
+        <label class="form-check"><input type="checkbox" id="sAfternoon" value="AFTERNOON"> Afternoon</label>
+        <label class="form-check"><input type="checkbox" id="sNight" value="NIGHT"> Night</label>
+        <label class="form-check"><input type="checkbox" id="sGeneral" value="GENERAL"> General</label>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="App.closeModal('scheduleModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Schedule</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="/js/app.js"></script>
+<script src="/js/custom-select.js"></script>
+<script>
+if (!App.initAdmin('locations')) throw '';
+App.initNotifications(App.apiFetch);
+var esc = App.esc, $ = App.$;
+var allLocations = [];
+var _treeData = null;
+var _nodeMap = {};
+var CONTAINER_TYPES = ['BUILDING', 'FLOOR'];
+var ROOM_ICONS = {
+  ROOM:{t:'RM',bg:'#f0fdfa',c:'#0d9488'},CORRIDOR:{t:'CR',bg:'#fff7ed',c:'#ea580c'},
+  WASHROOM:{t:'WR',bg:'#eff6ff',c:'#2563eb'},ICU:{t:'IC',bg:'#fef2f2',c:'#dc2626'},
+  LOBBY:{t:'LB',bg:'#faf5ff',c:'#9333ea'},KITCHEN:{t:'KT',bg:'#fefce8',c:'#ca8a04'},
+  WARD:{t:'WD',bg:'#f0fdf4',c:'#16a34a'},MEETING_ROOM:{t:'MR',bg:'#f8fafc',c:'#475569'},
+  OTHER:{t:'?',bg:'#f1f5f9',c:'#64748b'}
+};
+var SHIFT_COLORS = {MORNING:'morning',AFTERNOON:'afternoon',NIGHT:'night',GENERAL:'general'};
+
+// Open QR print page in new tab with session transfer
+function openQRPrint() {
+  var w = window.open('/admin-qr-print', '_blank');
+  if (!w) { App.toast('Pop-up blocked — please allow pop-ups for this site', 'error'); return; }
+  var sessionData = {};
+  for (var i = 0; i < sessionStorage.length; i++) {
+    var key = sessionStorage.key(i);
+    sessionData[key] = sessionStorage.getItem(key);
+  }
+  var attempts = 0;
+  var interval = setInterval(function() {
+    try { w.postMessage({ type: 'session-transfer', data: sessionData }, location.origin); } catch(e) { clearInterval(interval); }
+    attempts++;
+    if (attempts > 50) clearInterval(interval);
+  }, 100);
+}
+
+App.showSkeletonRows('treeContainer');
+
+async function loadTree() {
+  var showInactive = $('showInactive').checked;
+  var res = await App.apiFetch('/locations/tree' + (showInactive ? '' : '?active=true'));
+  if (!res) {
+    $('treeContainer').innerHTML = '<div class="loc-error">⚠ Failed to load locations. Please refresh.</div>';
+    $('searchBar').innerHTML = '';
+    return;
+  }
+  var tree = await res.json();
+  if (!Array.isArray(tree)) { $('treeContainer').innerHTML = '<div class="loc-empty">No locations found</div>'; $('searchBar').innerHTML = ''; return; }
+  _treeData = tree;
+  allLocations = [];
+  _nodeMap = {};
+  flattenTree(tree, '');
+
+  if (!tree.length) {
+    $('searchBar').innerHTML = '';
+    $('treeContainer').innerHTML = '<div class="loc-empty"><span class="loc-empty-icon">🏢</span><div class="loc-empty-text">No locations yet</div><div class="loc-empty-sub">Add your first building to get started</div></div>';
+  } else {
+    var totals = {rooms:0,cleans:0,tickets:0,unscheduled:0};
+    function countAll(nodes){for(var i=0;i<nodes.length;i++){var n=nodes[i];if(!isContainer(n.type)){totals.rooms++;totals.cleans+=n._count.cleaningRecords;totals.tickets+=n._count.tickets;if(!getShifts(n))totals.unscheduled++}if(n.children)countAll(n.children)}}
+    countAll(tree);
+    var summary = '<div class="loc-summary">' +
+      '<span class="loc-summary-item"><b>' + totals.rooms + '</b> rooms</span>' +
+      '<span class="loc-summary-item"><b>' + totals.cleans + '</b> total cleans</span>' +
+      '<span class="loc-summary-item"><b>' + totals.tickets + '</b> open tickets</span>' +
+      (totals.unscheduled > 0 ? '<span class="loc-summary-item warn"><b>' + totals.unscheduled + '</b> unscheduled</span>' : '') +
+    '</div>';
+
+    // Search bar
+    $('searchBar').innerHTML = '<div class="loc-search-bar"><input type="text" class="loc-search" id="locSearchInput" placeholder="Search rooms, floors, buildings…"><span class="loc-search-count" id="searchCount"></span></div>';
+    $('locSearchInput').addEventListener('input', onSearch);
+
+    $('treeContainer').innerHTML = summary + renderNodes(tree, 0);
+    bindCollapseToggles();
+  }
+  populateParentSelect();
+}
+
+function getShifts(n) {
+  if (n.cleaningSchedules && n.cleaningSchedules.length && n.cleaningSchedules[0].shifts && n.cleaningSchedules[0].shifts.length) return n.cleaningSchedules[0].shifts;
+  if (n.schedule && n.schedule.shifts && n.schedule.shifts.length) return n.schedule.shifts;
+  return null;
+}
+
+function flattenTree(nodes, prefix) {
+  for (var i = 0; i < nodes.length; i++) {
+    var n = nodes[i];
+    allLocations.push({ id: n.id, name: prefix + n.name, type: n.type });
+    _nodeMap[n.id] = n;
+    if (n.children && n.children.length) flattenTree(n.children, prefix + n.name + ' → ');
+  }
+}
+
+function isContainer(type) { return CONTAINER_TYPES.indexOf(type) !== -1; }
+
+function countChildren(node) {
+  var rooms = 0, cleans = 0, tickets = 0;
+  function walk(n) {
+    if (!isContainer(n.type)) { rooms++; cleans += n._count.cleaningRecords; tickets += n._count.tickets; }
+    if (n.children) for (var i = 0; i < n.children.length; i++) walk(n.children[i]);
+  }
+  if (node.children) for (var i = 0; i < node.children.length; i++) walk(node.children[i]);
+  return { rooms: rooms, cleans: cleans, tickets: tickets };
+}
+
+// SVG icons for action buttons
+var ICO = {
+  chevron: '<svg class="collapse-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>',
+  edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
+  schedule: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
+  qr: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM20 14v3h-3M14 20h3M20 20h0"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>',
+  activate: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>'
+};
+
+function renderNodes(nodes, depth) {
+  var html = '';
+  for (var i = 0; i < nodes.length; i++) {
+    var n = nodes[i];
+    var inactive = n.isActive === false;
+    var inactiveC = inactive ? ' loc-inactive' : '';
+    var inactiveB = inactive ? '<span class="badge-inactive">Inactive</span>' : '';
+
+    if (isContainer(n.type)) {
+      var cls = n.type === 'BUILDING' ? 'building' : 'floor';
+      var icon = n.type === 'BUILDING' ? '🏢' : '📂';
+      var stats = countChildren(n);
+      var ticketCls = stats.tickets > 0 ? ' has-tickets' : '';
+      html += '<div class="loc-group' + inactiveC + '" data-id="' + n.id + '" data-name="' + esc(n.name) + '">' +
+        '<div class="loc-group-header" data-toggle="collapse">' +
+          '<div class="loc-group-left">' +
+            ICO.chevron +
+            '<div class="loc-group-icon ' + cls + '">' + icon + '</div>' +
+            '<div class="loc-group-title">' +
+              '<span class="loc-group-name">' + esc(n.name) + ' ' + inactiveB + '</span>' +
+              '<span class="loc-group-sub">' + n.type.charAt(0) + n.type.slice(1).toLowerCase() + ' · ' + stats.rooms + ' room' + (stats.rooms !== 1 ? 's' : '') + '</span>' +
+            '</div>' +
+          '</div>' +
+          '<div class="loc-group-right">' +
+            '<div class="loc-group-pills">' +
+              '<span class="pill pill-cleans">' + stats.cleans + ' cleans</span>' +
+              '<span class="pill pill-tickets' + ticketCls + '">' + stats.tickets + ' tickets</span>' +
+            '</div>' +
+            '<button class="act-btn act-edit" title="Edit" data-action="edit" data-id="' + n.id + '">' + ICO.edit + '</button>' +
+            (inactive
+              ? '<button class="act-btn act-activate" title="Activate" data-action="activate" data-id="' + n.id + '">' + ICO.activate + '</button>'
+              : '<button class="act-btn act-delete" title="Deactivate" data-action="delete" data-id="' + n.id + '">' + ICO.trash + '</button>') +
+          '</div>' +
+        '</div>';
+      if (n.children && n.children.length) {
+        html += '<div class="loc-group-children">' + renderNodes(n.children, depth + 1) + '</div>';
+      }
+      html += '</div>';
+    } else {
+      var ri = ROOM_ICONS[n.type] || ROOM_ICONS.OTHER;
+      var schedHtml = '';
+      var shifts = getShifts(n);
+      if (shifts) {
+        for (var s = 0; s < shifts.length; s++) {
+          var sc = SHIFT_COLORS[shifts[s]] || 'general';
+          schedHtml += '<span class="sched-dot ' + sc + '" title="' + shifts[s] + '"></span>';
+        }
+        schedHtml += '<span class="sched-label">' + shifts.join(' · ') + '</span>';
+      } else {
+        schedHtml = '<span class="badge-nosched">No schedule</span>';
+      }
+
+      var statsHtml = '<div class="room-stats">' +
+        '<span class="room-stat"><span class="room-stat-val">' + n._count.cleaningRecords + '</span> cleans</span>' +
+        '<span class="room-stat">' + (n._count.tickets > 0 ? '<span class="room-stat-val" style="color:var(--danger)">' + n._count.tickets + '</span>' : '<span class="room-stat-val">0</span>') + ' tickets</span>' +
+      '</div>';
+      var compactStats = '<div class="room-stats-compact">' +
+        '<span class="room-stat"><span class="room-stat-val">' + n._count.cleaningRecords + '</span>🧹</span>' +
+        (n._count.tickets > 0 ? '<span class="room-stat" style="color:var(--danger)"><span class="room-stat-val">' + n._count.tickets + '</span>🎫</span>' : '') +
+      '</div>';
+
+      html += '<div class="room-card' + inactiveC + '" data-id="' + n.id + '" data-name="' + esc(n.name) + '" data-type="' + n.type + '">' +
+        '<div class="room-left">' +
+          '<div class="room-icon" style="background:' + ri.bg + ';color:' + ri.c + ';font-weight:700;font-size:.75rem;letter-spacing:.5px">' + ri.t + '</div>' +
+          '<div class="room-info">' +
+            '<div class="room-name">' + esc(n.name) + ' ' + inactiveB + '</div>' +
+            '<div class="room-meta-row">' +
+              '<span class="room-type-tag">' + n.type.replace('_', ' ') + '</span>' +
+              schedHtml +
+            '</div>' +
+            compactStats +
+          '</div>' +
+        '</div>' +
+        '<div class="room-right">' +
+          statsHtml +
+          '<button class="act-btn act-edit" title="Edit" data-action="edit" data-id="' + n.id + '">' + ICO.edit + '</button>' +
+          '<button class="act-btn act-schedule" title="Schedule" data-action="schedule" data-id="' + n.id + '">' + ICO.schedule + '</button>' +
+          '<button class="act-btn act-qr" title="QR Code" data-action="qr" data-id="' + n.id + '">' + ICO.qr + '</button>' +
+          (inactive
+            ? '<button class="act-btn act-activate" title="Activate" data-action="activate" data-id="' + n.id + '">' + ICO.activate + '</button>'
+            : '<button class="act-btn act-delete" title="Deactivate" data-action="delete" data-id="' + n.id + '">' + ICO.trash + '</button>') +
+        '</div>' +
+      '</div>';
+      if (n.children && n.children.length) {
+        html += '<div class="loc-group-children">' + renderNodes(n.children, depth + 1) + '</div>';
+      }
+    }
+  }
+  return html;
+}
+
+// ── Collapse / Expand + Action buttons (bound once) ──
+var _treeBound = false;
+function bindCollapseToggles() {
+  if (_treeBound) return;
+  _treeBound = true;
+  $('treeContainer').addEventListener('click', function(e) {
+    // Collapse/expand
+    var header = e.target.closest('[data-toggle="collapse"]');
+    if (header && !e.target.closest('.act-btn')) {
+      var group = header.parentElement;
+      if (group && group.classList.contains('loc-group')) {
+        group.classList.toggle('collapsed');
+      }
+      return;
+    }
+    // Action buttons via data attributes
+    var btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    var action = btn.dataset.action;
+    var id = btn.dataset.id;
+    var node = _nodeMap[id];
+    if (!node) return;
+    e.stopPropagation();
+    if (action === 'edit') openEdit(id, node.name, node.type, node.sortOrder, node.notes || '', node.parentId || '', node.isActive);
+    else if (action === 'schedule') openScheduleModal(id, node.name);
+    else if (action === 'qr') showQR(id, node.name, node.qrCode);
+    else if (action === 'activate') activateLoc(id, node.name);
+    else if (action === 'delete') deleteLoc(id, node.name);
+  });
+}
+
+// ── Search ──
+function onSearch() {
+  var q = ($('locSearchInput') ? $('locSearchInput').value : '').toLowerCase().trim();
+  var groups = $('treeContainer').querySelectorAll('.loc-group');
+  var cards = $('treeContainer').querySelectorAll('.room-card');
+  var matchCount = 0;
+
+  if (!q) {
+    // Reset: show everything, restore collapse state
+    for (var i = 0; i < groups.length; i++) groups[i].classList.remove('loc-hidden');
+    for (var i = 0; i < cards.length; i++) cards[i].classList.remove('loc-hidden');
+    if ($('searchCount')) $('searchCount').textContent = '';
+    return;
+  }
+
+  // First hide all
+  for (var i = 0; i < groups.length; i++) groups[i].classList.add('loc-hidden');
+  for (var i = 0; i < cards.length; i++) cards[i].classList.add('loc-hidden');
+
+  // Show matching rooms and their ancestors
+  for (var i = 0; i < cards.length; i++) {
+    var card = cards[i];
+    var name = (card.dataset.name || '').toLowerCase();
+    var type = (card.dataset.type || '').toLowerCase().replace('_', ' ');
+    if (name.indexOf(q) !== -1 || type.indexOf(q) !== -1) {
+      card.classList.remove('loc-hidden');
+      matchCount++;
+      // Show all ancestor groups
+      var parent = card.parentElement;
+      while (parent && parent !== $('treeContainer')) {
+        if (parent.classList.contains('loc-group')) {
+          parent.classList.remove('loc-hidden');
+          parent.classList.remove('collapsed');
+        }
+        parent = parent.parentElement;
+      }
+    }
+  }
+  // Also show matching groups (buildings/floors)
+  for (var i = 0; i < groups.length; i++) {
+    var g = groups[i];
+    var name = (g.dataset.name || '').toLowerCase();
+    if (name.indexOf(q) !== -1) {
+      g.classList.remove('loc-hidden');
+      matchCount++;
+      // Show all descendants
+      var desc = g.querySelectorAll('.loc-group,.room-card');
+      for (var j = 0; j < desc.length; j++) desc[j].classList.remove('loc-hidden');
+      // Show ancestors
+      var parent = g.parentElement;
+      while (parent && parent !== $('treeContainer')) {
+        if (parent.classList.contains('loc-group')) parent.classList.remove('loc-hidden');
+        parent = parent.parentElement;
+      }
+    }
+  }
+
+  if ($('searchCount')) $('searchCount').textContent = matchCount + ' match' + (matchCount !== 1 ? 'es' : '');
+}
+
+function populateParentSelect() {
+  var sel = $('locParent');
+  sel.innerHTML = '<option value="">— None (Top Level) —</option>' + allLocations.map(function(l) { return '<option value="' + l.id + '">' + esc(l.name) + ' (' + l.type + ')</option>'; }).join('');
+}
+
+function openAdd() {
+  $('modalTitle').textContent = 'Add Location';
+  $('locForm').reset(); $('locId').value = '';
+  $('statusGroup').style.display = 'none';
+  App.hideError('modalError');
+  App.openModal('modal');
+}
+
+function openEdit(id, name, type, sort, notes, parentId, isActive) {
+  $('modalTitle').textContent = 'Edit Location';
+  $('locId').value = id; $('locName').value = name; $('locType').value = type;
+  $('locSort').value = sort; $('locNotes').value = notes;
+  $('locParent').value = parentId || '';
+  $('locActive').value = isActive === false ? 'false' : 'true';
+  $('statusGroup').style.display = '';
+  App.hideError('modalError');
+  App.openModal('modal');
+}
+
+$('locForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  var id = $('locId').value;
+  var body = { name: $('locName').value.trim(), type: $('locType').value, sortOrder: parseInt($('locSort').value) || 0, notes: $('locNotes').value.trim() || undefined };
+  var parentId = $('locParent').value;
+  if (parentId) body.parentId = parentId;
+  if (id) body.isActive = $('locActive').value === 'true';
+  var res = await App.apiFetch(id ? '/locations/' + id : '/locations', { method: id ? 'PATCH' : 'POST', body: JSON.stringify(body) });
+  if (!res) return;
+  if (!res.ok) { var d = await res.json(); App.showError('modalError', d.error || 'Failed'); return; }
+  App.closeModal('modal'); App.toast(id ? 'Location updated' : 'Location created', 'success'); loadTree();
+});
+
+function openScheduleModal(locId, locName) {
+  $('schedLocId').value = locId; $('schedLocName').textContent = locName;
+  App.hideError('schedError');
+  $('sMorning').checked = false; $('sAfternoon').checked = false; $('sNight').checked = false; $('sGeneral').checked = false;
+  App.apiFetch('/locations/' + locId + '/schedule').then(async function(res) {
+    if (res && res.ok) {
+      var sched = await res.json();
+      $('schedFreq').value = sched.frequency;
+      for (var i = 0; i < sched.shifts.length; i++) {
+        var s = sched.shifts[i];
+        if (s === 'MORNING') $('sMorning').checked = true;
+        if (s === 'AFTERNOON') $('sAfternoon').checked = true;
+        if (s === 'NIGHT') $('sNight').checked = true;
+        if (s === 'GENERAL') $('sGeneral').checked = true;
+      }
+    }
+  });
+  App.openModal('scheduleModal');
+}
+
+$('schedForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  var locId = $('schedLocId').value;
+  var shifts = [];
+  if ($('sMorning').checked) shifts.push('MORNING');
+  if ($('sAfternoon').checked) shifts.push('AFTERNOON');
+  if ($('sNight').checked) shifts.push('NIGHT');
+  if ($('sGeneral').checked) shifts.push('GENERAL');
+  if (shifts.length === 0) { App.showError('schedError', 'Select at least one shift'); return; }
+  var res = await App.apiFetch('/locations/' + locId + '/schedule', { method: 'PUT', body: JSON.stringify({ frequency: $('schedFreq').value, shifts: shifts }) });
+  if (!res) return;
+  if (!res.ok) { var d = await res.json(); App.showError('schedError', d.error || 'Failed'); return; }
+  App.closeModal('scheduleModal'); App.toast('Schedule saved', 'success'); loadTree();
+});
+
+// ── QR Modal ──
+var currentQRName = '';
+async function showQR(id, name, qrCode) {
+  currentQRName = name;
+  $('qrModalTitle').textContent = name;
+  $('qrSvg').innerHTML = '<div style="color:var(--text-muted);padding:2rem">Loading…</div>';
+  $('qrCodeText').textContent = qrCode || '';
+  App.openModal('qrModal');
+  var res = await App.apiFetch('/locations/' + id + '/qr-image');
+  if (res && res.ok) {
+    var svg = await res.text();
+    $('qrSvg').innerHTML = svg;
+    var svgEl = $('qrSvg').querySelector('svg');
+    if (svgEl) { svgEl.style.width = '220px'; svgEl.style.height = '220px'; }
+  } else { $('qrSvg').innerHTML = '<div class="error-msg" style="display:block">Failed to load QR</div>'; }
+}
+
+function downloadQR() {
+  var svgEl = $('qrSvg').querySelector('svg');
+  if (!svgEl) return;
+  var canvas = document.createElement('canvas');
+  canvas.width = 512; canvas.height = 512;
+  var ctx = canvas.getContext('2d');
+  var svgData = new XMLSerializer().serializeToString(svgEl);
+  var img = new Image();
+  img.onload = function() {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, 512, 512);
+    ctx.drawImage(img, 0, 0, 512, 512);
+    ctx.fillStyle = '#1e293b';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(currentQRName, 256, 500);
+    var a = document.createElement('a');
+    a.download = (currentQRName || 'qr-code').replace(/[^a-zA-Z0-9]/g, '_') + '.png';
+    a.href = canvas.toDataURL('image/png');
+    a.click();
+  };
+  img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+}
+
+function copyCode() {
+  var code = $('qrCodeText').textContent;
+  if (!code) return;
+  navigator.clipboard.writeText(code).then(function() { App.toast('Code copied!', 'success'); });
+}
+
+// ── Activate location ──
+async function activateLoc(id, name) {
+  if (!await App.confirmDialog('Activate "' + name + '"?\n\nThis will make the location visible and available again.')) return;
+  var res = await App.apiFetch('/locations/' + id, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ isActive: true }) });
+  if (!res) return;
+  if (!res.ok) { var d = await res.json(); App.toast(d.error || 'Failed to activate', 'error'); return; }
+  App.toast('"' + name + '" activated', 'success'); loadTree();
+}
+
+// ── Deactivate with confirmation ──
+async function deleteLoc(id, name) {
+  if (!await App.confirmDialog('Deactivate "' + name + '"?\n\nThis will hide the location but preserve all associated data.')) return;
+  var res = await App.apiFetch('/locations/' + id, { method: 'DELETE' });
+  if (!res) return;
+  if (res.status === 409) {
+    var data = await res.json();
+    var deps = data.dependencies || {};
+    var msg = '"' + name + '" has linked data:\n\n';
+    if (deps.children > 0) msg += '• ' + deps.children + ' child location(s)\n';
+    if (deps.cleaningRecords > 0) msg += '• ' + deps.cleaningRecords + ' cleaning record(s)\n';
+    if (deps.tickets > 0) msg += '• ' + deps.tickets + ' ticket(s)\n';
+    msg += '\nDeactivate anyway? All data will be preserved.';
+    if (!await App.confirmDialog(msg)) return;
+    var res2 = await App.apiFetch('/locations/' + id + '?force=true', { method: 'DELETE' });
+    if (!res2) return;
+    if (!res2.ok) { var d = await res2.json(); App.toast(d.error || 'Failed', 'error'); return; }
+    App.toast('"' + name + '" deactivated', 'success'); loadTree();
+    return;
+  }
+  if (!res.ok) { var d = await res.json(); App.toast(d.error || 'Failed to delete', 'error'); return; }
+  App.toast('"' + name + '" deactivated', 'success'); loadTree();
+}
+
+loadTree();
+</script>
+</body>
+</html>
