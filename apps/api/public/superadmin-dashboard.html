@@ -92,6 +92,25 @@
 .empty-state { text-align: center; padding: 2rem; color: var(--text-muted); font-size: .85rem; }
 .empty-state-icon { font-size: 2.5rem; margin-bottom: .5rem; opacity: .5; }
 
+/* QR Modal */
+.qr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+.qr-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem; text-align: center; }
+.qr-card-title { font-size: .78rem; font-weight: 600; color: var(--text); margin-bottom: .15rem; }
+.qr-card-sub { font-size: .68rem; color: var(--text-muted); margin-bottom: .6rem; }
+.qr-card svg { width: 160px; height: 160px; display: block; margin: 0 auto .5rem; }
+.qr-card-url { font-size: .62rem; color: var(--text-light); word-break: break-all; font-family: monospace; background: var(--surface); padding: .25rem .4rem; border-radius: var(--radius-sm); }
+.qr-mod-section { margin-bottom: 1.25rem; }
+.qr-mod-label { font-size: .85rem; font-weight: 600; color: var(--sa); margin-bottom: .6rem; display: flex; align-items: center; gap: .4rem; }
+.qr-print-bar { display: flex; justify-content: flex-end; gap: .5rem; margin-bottom: .75rem; }
+@media (max-width: 480px) { .qr-grid { grid-template-columns: 1fr 1fr; gap: .6rem; } .qr-card svg { width: 120px; height: 120px; } }
+@media print {
+  body > *:not(#loginQrModal) { display: none !important; }
+  #loginQrModal { position: static; background: #fff; }
+  #loginQrModal .modal { max-width: 100%; max-height: none; box-shadow: none; border: none; overflow: visible; }
+  .qr-print-bar, .modal-actions { display: none !important; }
+  .qr-card { break-inside: avoid; border: 1px solid #ddd; }
+}
+
 @media (max-width: 1024px) {
   .sa-stats { grid-template-columns: repeat(3, 1fr); }
   .analytics-grid { grid-template-columns: 1fr; }
@@ -374,6 +393,20 @@
   </div>
 </div>
 
+<!-- Login QR Modal -->
+<div class="modal-overlay" id="loginQrModal">
+  <div class="modal" style="max-width:620px">
+    <h2 class="modal-title" id="qrModalTitle">Login QR Codes</h2>
+    <div class="qr-print-bar">
+      <button class="btn btn-sm btn-outline" onclick="window.print()">🖨 Print</button>
+    </div>
+    <div id="qrModalBody"><div class="empty-state">Loading QR codes…</div></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-outline" onclick="App.closeModal('loginQrModal')">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- Password Reset Modal -->
 <div class="modal-overlay" id="pwModal">
   <div class="modal" style="max-width:400px">
@@ -476,6 +509,7 @@ async function loadOrgs() {
       '<td class="actions-cell">' +
         '<button class="btn btn-sm btn-sa" onclick="enterOrg(\'' + o.id + '\',\'' + esc(o.name).replace(/'/g, "\\'") + '\',\'' + esc(o.slug || '').replace(/'/g, "\\'") + '\')">Enter</button>' +
         '<button class="btn btn-sm btn-outline" onclick="editOrg(\'' + o.id + '\')">Edit</button>' +
+        '<button class="btn btn-sm btn-outline" onclick="showLoginQR(\'' + o.id + '\')" title="Login QR Codes">QR</button>' +
         (o.status !== 'DELETED' ? '<button class="btn btn-sm btn-danger" onclick="deleteOrg(\'' + o.id + '\')">Delete</button>' : '') +
       '</td></tr>';
   }).join('');
@@ -911,6 +945,68 @@ function formatAction(action) {
     'cleaning_completed': 'Cleaning Completed'
   };
   return labels[action] || action.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+}
+
+// ─── Login QR Codes ───
+var MOD_NAMES = { hk: '🧹 Housekeeping', ele: '⚡ Electrical', civil: '🏗️ Civil', asset: '📦 Assets', complaints: '📝 Complaints' };
+
+async function showLoginQR(orgId) {
+  var org = allOrgs.find(function(o) { return o.id === orgId; });
+  if (!org) return;
+  if (!org.slug) { App.toast('This organization has no URL slug configured', 'warning'); return; }
+  var mods = org.enabledModules || ['hk'];
+  $('qrModalTitle').textContent = 'Login QR — ' + esc(org.name);
+  $('qrModalBody').innerHTML = '<div class="empty-state">Loading QR codes…</div>';
+  App.openModal('loginQrModal');
+
+  var html = '';
+  for (var i = 0; i < mods.length; i++) {
+    var mod = mods[i];
+    html += '<div class="qr-mod-section">';
+    html += '<div class="qr-mod-label">' + (MOD_NAMES[mod] || mod) + '</div>';
+    html += '<div class="qr-grid">';
+    html += qrCardPlaceholder(orgId, mod, 'admin', org.slug);
+    html += qrCardPlaceholder(orgId, mod, 'supervisor', org.slug);
+    html += '</div></div>';
+  }
+  $('qrModalBody').innerHTML = html;
+
+  // Fetch QR SVGs
+  for (var j = 0; j < mods.length; j++) {
+    fetchLoginQR(orgId, mods[j], 'admin');
+    fetchLoginQR(orgId, mods[j], 'supervisor');
+  }
+}
+
+function qrCardPlaceholder(orgId, mod, role, slug) {
+  var label = role === 'admin' ? 'Admin Login' : 'Supervisor Login';
+  var page = role === 'admin' ? 'admin-login' : 'supervisor-login';
+  var url = '/' + slug + '/' + mod + '/' + page;
+  return '<div class="qr-card">' +
+    '<div class="qr-card-title">' + label + '</div>' +
+    '<div class="qr-card-sub">' + mod.toUpperCase() + ' module</div>' +
+    '<div id="qr-' + mod + '-' + role + '" style="width:160px;height:160px;margin:0 auto .5rem;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:.75rem">Loading…</div>' +
+    '<div class="qr-card-url">' + esc(url) + '</div>' +
+  '</div>';
+}
+
+async function fetchLoginQR(orgId, mod, role) {
+  var el = $('qr-' + mod + '-' + role);
+  if (!el) return;
+  try {
+    var res = await App.apiFetch('/superadmin/organizations/' + orgId + '/login-qr?mod=' + mod + '&role=' + role);
+    if (res && res.ok) {
+      var svg = await res.text();
+      el.innerHTML = svg;
+      el.style = '';
+      var svgEl = el.querySelector('svg');
+      if (svgEl) { svgEl.style.width = '160px'; svgEl.style.height = '160px'; }
+    } else {
+      el.textContent = 'Failed';
+    }
+  } catch(e) {
+    el.textContent = 'Error';
+  }
 }
 
 // ─── Init ───

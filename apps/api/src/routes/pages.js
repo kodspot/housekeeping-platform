@@ -38,6 +38,9 @@ async function pageRoutes(fastify) {
   // Guard: org slugs are lowercase alphanumeric with hyphens, never contain dots
   function isStaticFile(str) { return str.includes('.'); }
 
+  // Known static asset directories in /public
+  var STATIC_DIRS = new Set(['css', 'js']);
+
   // ── Static pages ──
   fastify.get('/', sendPage('index.html'));
   fastify.get('/superadmin-login', sendPage('superadmin-login.html'));
@@ -52,8 +55,10 @@ async function pageRoutes(fastify) {
   // ── Org landing page: /{org} ──
   fastify.get('/:orgSlug', async (request, reply) => {
     const { orgSlug } = request.params;
-    // Let static files (site.webmanifest, favicon.ico, etc.) fall through
-    if (isStaticFile(orgSlug)) return reply.callNotFound();
+    // Serve root-level static files (site.webmanifest, favicon.ico, robots.txt, etc.)
+    if (isStaticFile(orgSlug)) return reply.sendFile(orgSlug);
+    // Don't treat static dir names as org slugs
+    if (STATIC_DIRS.has(orgSlug)) return reply.code(404).send({ error: 'Not found' });
     const org = await validateOrg(orgSlug);
     if (!org) return reply.code(404).send({ error: 'Organization not found' });
     return reply.sendFile('org-home.html');
@@ -62,6 +67,8 @@ async function pageRoutes(fastify) {
   // ── Module landing page: /{org}/{mod} ──
   fastify.get('/:orgSlug/:mod', async (request, reply) => {
     const { orgSlug, mod } = request.params;
+    // Serve static asset files (e.g. /css/design-system.css, /js/app.js)
+    if (STATIC_DIRS.has(orgSlug)) return reply.sendFile(orgSlug + '/' + mod);
     if (!VALID_MODULES.includes(mod)) return reply.callNotFound();
     const org = await validateOrg(orgSlug);
     if (!org) return reply.code(404).send({ error: 'Organization not found' });

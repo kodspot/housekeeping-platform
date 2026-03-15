@@ -172,6 +172,19 @@
 .dash-refresh button{background:none;border:1px solid var(--border);border-radius:var(--radius);padding:.25rem .6rem;font-size:.72rem;cursor:pointer;color:var(--text-muted);display:inline-flex;align-items:center;gap:.3rem;transition:border-color .15s,color .15s}
 .dash-refresh button:hover{border-color:var(--primary);color:var(--primary)}
 .dash-refresh button.refreshing{opacity:.5;pointer-events:none}
+
+/* QR Modal */
+.qr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem}
+.qr-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1rem;text-align:center}
+.qr-card-title{font-size:.78rem;font-weight:600;color:var(--text);margin-bottom:.15rem}
+.qr-card-sub{font-size:.68rem;color:var(--text-muted);margin-bottom:.6rem}
+.qr-card svg{width:160px;height:160px;display:block;margin:0 auto .5rem}
+.qr-card-url{font-size:.62rem;color:var(--text-light);word-break:break-all;font-family:monospace;background:var(--surface);padding:.25rem .4rem;border-radius:var(--radius-sm)}
+.qr-mod-section{margin-bottom:1.25rem}
+.qr-mod-label{font-size:.85rem;font-weight:600;color:var(--primary);margin-bottom:.6rem;display:flex;align-items:center;gap:.4rem}
+.qr-print-bar{display:flex;justify-content:flex-end;gap:.5rem;margin-bottom:.75rem}
+@media(max-width:480px){.qr-grid{grid-template-columns:1fr 1fr;gap:.6rem}.qr-card svg{width:120px;height:120px}}
+@media print{body>*:not(#adminQrModal){display:none!important}#adminQrModal{position:static;background:#fff}#adminQrModal .modal{max-width:100%;max-height:none;box-shadow:none;border:none;overflow:visible}.qr-print-bar,.modal-actions{display:none!important}.qr-card{break-inside:avoid;border:1px solid #ddd}}
 /* KPI trend arrow */
 .kpi-trend{font-size:.68rem;font-weight:600}
 .kpi-trend-up{color:#16a34a}
@@ -197,6 +210,7 @@
   <!-- Refresh indicator -->
   <div class="dash-refresh" id="refreshBar">
     <span id="lastRefresh"></span>
+    <button onclick="showAdminQR()" title="Share login QR codes">📱 Share QR</button>
     <button onclick="manualRefresh()" id="refreshBtn">↻ Refresh</button>
   </div>
 
@@ -255,6 +269,21 @@
     <div id="photoGallery" class="work-log"></div>
   </div>
 </main>
+
+<!-- QR Modal -->
+<div class="modal-overlay" id="adminQrModal">
+  <div class="modal" style="max-width:620px">
+    <h2 class="modal-title">Login QR Codes</h2>
+    <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:.75rem">Staff can scan these QR codes to open the login page and install the app on their phone.</p>
+    <div class="qr-print-bar">
+      <button class="btn btn-sm btn-outline" onclick="window.print()">🖨 Print</button>
+    </div>
+    <div id="adminQrBody"><div class="empty-state">Loading QR codes…</div></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-outline" onclick="App.closeModal('adminQrModal')">Close</button>
+    </div>
+  </div>
+</div>
 
 <!-- Lightbox -->
 <div class="lightbox-overlay" id="lightbox">
@@ -663,6 +692,70 @@ loadAll();
 var _refreshInterval = setInterval(function() {
   loadAll();
 }, 5 * 60 * 1000);
+
+// ── Login QR Codes ──
+var MOD_QR_NAMES = { hk: '🧹 Housekeeping', ele: '⚡ Electrical', civil: '🏗️ Civil', asset: '📦 Assets', complaints: '📝 Complaints' };
+
+async function showAdminQR() {
+  $('adminQrBody').innerHTML = '<div class="empty-state">Loading QR codes…</div>';
+  App.openModal('adminQrModal');
+
+  // Fetch org info to get enabled modules
+  var me = await App.apiFetchJson('/auth/me');
+  if (!me || !me.org) { $('adminQrBody').innerHTML = '<div class="empty-state">Could not load organization info</div>'; return; }
+  var org = me.org;
+  var mods = org.enabledModules || ['hk'];
+  var slug = App.getOrgSlug() || org.slug;
+  if (!slug) { $('adminQrBody').innerHTML = '<div class="empty-state">Organization URL not configured</div>'; return; }
+
+  var html = '';
+  for (var i = 0; i < mods.length; i++) {
+    var mod = mods[i];
+    html += '<div class="qr-mod-section">';
+    html += '<div class="qr-mod-label">' + (MOD_QR_NAMES[mod] || mod) + '</div>';
+    html += '<div class="qr-grid">';
+    html += adminQrCard(mod, 'admin', slug);
+    html += adminQrCard(mod, 'supervisor', slug);
+    html += '</div></div>';
+  }
+  $('adminQrBody').innerHTML = html;
+
+  for (var j = 0; j < mods.length; j++) {
+    fetchAdminQR(mods[j], 'admin');
+    fetchAdminQR(mods[j], 'supervisor');
+  }
+}
+
+function adminQrCard(mod, role, slug) {
+  var label = role === 'admin' ? 'Admin Login' : 'Supervisor Login';
+  var page = role === 'admin' ? 'admin-login' : 'supervisor-login';
+  var url = '/' + slug + '/' + mod + '/' + page;
+  return '<div class="qr-card">' +
+    '<div class="qr-card-title">' + label + '</div>' +
+    '<div class="qr-card-sub">' + mod.toUpperCase() + ' module</div>' +
+    '<div id="aqr-' + mod + '-' + role + '" style="width:160px;height:160px;margin:0 auto .5rem;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:.75rem">Loading…</div>' +
+    '<div class="qr-card-url">' + esc(url) + '</div>' +
+  '</div>';
+}
+
+async function fetchAdminQR(mod, role) {
+  var el = $('aqr-' + mod + '-' + role);
+  if (!el) return;
+  try {
+    var res = await App.apiFetch('/auth/login-qr?mod=' + mod + '&role=' + role);
+    if (res && res.ok) {
+      var svg = await res.text();
+      el.innerHTML = svg;
+      el.style = '';
+      var svgEl = el.querySelector('svg');
+      if (svgEl) { svgEl.style.width = '160px'; svgEl.style.height = '160px'; }
+    } else {
+      el.textContent = 'Failed';
+    }
+  } catch(e) {
+    el.textContent = 'Error';
+  }
+}
 </script>
 </body>
 </html>

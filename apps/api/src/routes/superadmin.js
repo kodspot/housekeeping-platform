@@ -1,11 +1,13 @@
 ﻿'use strict';
 
 const bcrypt = require('bcrypt');
+const QRCode = require('qrcode');
 const { z } = require('zod');
 const { prisma } = require('../lib/prisma');
 const { BCRYPT_COST, passwordSchema } = require('../lib/security');
 const { authenticateJWT, requireRole } = require('../middleware/auth');
 const { encryptWorkerPII, decryptWorkerPII } = require('../lib/crypto');
+const { APP_URL } = require('../config/env');
 
 async function superadminRoutes(fastify, opts) {
   fastify.addHook('preHandler', authenticateJWT);
@@ -643,6 +645,49 @@ async function superadminRoutes(fastify, opts) {
       limit: take,
       offset: skip
     };
+  });
+
+  // === Login QR Code Generator (for superadmin) ===
+  const VALID_MODULES_QR = ['hk', 'ele', 'civil', 'asset', 'complaints'];
+  const VALID_ROLES_QR = ['admin', 'supervisor'];
+
+  fastify.get('/superadmin/organizations/:id/login-qr', async (request, reply) => {
+    const { id } = request.params;
+    const { mod, role } = request.query;
+
+    if (!mod || VALID_MODULES_QR.indexOf(mod) === -1) {
+      return reply.code(400).send({ error: 'Invalid module. Must be one of: ' + VALID_MODULES_QR.join(', ') });
+    }
+    if (!role || VALID_ROLES_QR.indexOf(role) === -1) {
+      return reply.code(400).send({ error: 'Invalid role. Must be admin or supervisor' });
+    }
+
+    const org = await prisma.organization.findUnique({
+      where: { id },
+      select: { slug: true, enabledModules: true, status: true }
+    });
+    if (!org) return reply.code(404).send({ error: 'Organization not found' });
+    if (!org.slug) return reply.code(400).send({ error: 'Organization has no slug configured' });
+
+    const enabledMods = org.enabledModules || ['hk'];
+    if (enabledMods.indexOf(mod) === -1) {
+      return reply.code(400).send({ error: 'Module "' + mod + '" is not enabled for this organization' });
+    }
+
+    const loginPage = role === 'admin' ? 'admin-login' : 'supervisor-login';
+    const qrData = `${APP_URL}/${org.slug}/${mod}/${loginPage}`;
+
+    const svg = await QRCode.toString(qrData, {
+      type: 'svg',
+      errorCorrectionLevel: 'M',
+      margin: 2,
+      width: 512,
+      color: { dark: '#1e293b', light: '#ffffff' }
+    });
+
+    reply.header('Content-Type', 'image/svg+xml');
+    reply.header('Cache-Control', 'public, max-age=3600');
+    return svg;
   });
 }
 

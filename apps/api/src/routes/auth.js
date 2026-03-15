@@ -3,11 +3,13 @@
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const QRCode = require('qrcode');
 const { z } = require('zod');
 const { prisma } = require('../lib/prisma');
 const { BCRYPT_COST, passwordSchema } = require('../lib/security');
 const { strictRateLimit, loginRateLimit } = require('../middleware/rateLimits');
-const { authenticateJWT } = require('../middleware/auth');
+const { authenticateJWT, requireRole } = require('../middleware/auth');
+const { APP_URL } = require('../config/env');
 
 // Constant-time comparison that doesn't leak input length
 function safeCompareKeys(input, secret) {
@@ -176,7 +178,7 @@ async function authRoutes(fastify, opts) {
       select: {
         id: true, name: true, email: true, phone: true, role: true, orgId: true,
         isActive: true, createdAt: true,
-        org: { select: { id: true, name: true, type: true } }
+        org: { select: { id: true, name: true, type: true, slug: true, enabledModules: true } }
       }
     });
   });
@@ -269,6 +271,49 @@ async function authRoutes(fastify, opts) {
       tickets,
       auditLogs
     };
+  });
+
+  // === Login QR Code Generator (for admin panel) ===
+  const VALID_MODULES_QR = ['hk', 'ele', 'civil', 'asset', 'complaints'];
+  const VALID_ROLES_QR = ['admin', 'supervisor'];
+
+  fastify.get('/auth/login-qr', {
+    preHandler: [authenticateJWT, requireRole('ADMIN')]
+  }, async (request, reply) => {
+    const { mod, role } = request.query;
+
+    if (!mod || VALID_MODULES_QR.indexOf(mod) === -1) {
+      return reply.code(400).send({ error: 'Invalid module' });
+    }
+    if (!role || VALID_ROLES_QR.indexOf(role) === -1) {
+      return reply.code(400).send({ error: 'Invalid role' });
+    }
+
+    const org = await prisma.organization.findUnique({
+      where: { id: request.user.orgId },
+      select: { slug: true, enabledModules: true }
+    });
+    if (!org || !org.slug) return reply.code(400).send({ error: 'Organization not configured' });
+
+    const enabledMods = org.enabledModules || ['hk'];
+    if (enabledMods.indexOf(mod) === -1) {
+      return reply.code(400).send({ error: 'Module not enabled' });
+    }
+
+    const loginPage = role === 'admin' ? 'admin-login' : 'supervisor-login';
+    const qrData = `${APP_URL}/${org.slug}/${mod}/${loginPage}`;
+
+    const svg = await QRCode.toString(qrData, {
+      type: 'svg',
+      errorCorrectionLevel: 'M',
+      margin: 2,
+      width: 512,
+      color: { dark: '#1e293b', light: '#ffffff' }
+    });
+
+    reply.header('Content-Type', 'image/svg+xml');
+    reply.header('Cache-Control', 'public, max-age=3600');
+    return svg;
   });
 }
 
