@@ -22,6 +22,7 @@ async function registerSecurityPlugins(fastify) {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         scriptSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrcAttr: ["'unsafe-inline'"],
         imgSrc: ["'self'", 'data:', 'https:', 'blob:'],
         connectSrc: ["'self'"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
