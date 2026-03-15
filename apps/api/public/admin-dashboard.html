@@ -452,7 +452,7 @@ async function loadOverdue() {
       badges += '<span class="shift-badge ' + (shiftCls[g.shifts[j]] || '') + '">' + g.shifts[j] + '</span>';
     }
     badges += '</div>';
-    html += '<tr style="cursor:pointer" onclick="location.href=\'/admin-cleaning\'">' +
+    html += '<tr style="cursor:pointer" onclick="location.href=\'' + App.orgPath('admin-cleaning') + '\'">' +
       '<td>' + esc(parent + g.location.name) + '</td><td>' + badges + '</td><td class="hide-mobile">' + t + '</td></tr>';
   }
   html += '</tbody></table>';
@@ -543,7 +543,7 @@ async function loadProblems() {
     if (p.overdueShifts > 0) issues.push(p.overdueShifts + ' overdue');
     if (p.flaggedCount > 0) issues.push(p.flaggedCount + ' flagged');
     if (p.ticketCount > 0) issues.push(p.ticketCount + ' ticket' + (p.ticketCount > 1 ? 's' : ''));
-    html += '<tr style="cursor:pointer" onclick="location.href=\'/admin-cleaning\'">' +
+    html += '<tr style="cursor:pointer" onclick="location.href=\'' + App.orgPath('admin-cleaning') + '\'">' +
       '<td>' + esc(parent + p.location.name) + '</td>' +
       '<td><span class="severity ' + sev.cls + '">' + sev.label + '</span></td>' +
       '<td style="font-size:.72rem">' + issues.join(', ') + '</td></tr>';

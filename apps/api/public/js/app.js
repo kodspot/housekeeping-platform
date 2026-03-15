@@ -1,30 +1,54 @@
 /* ========================================================================
-   HOUSEKEEPING — Shared Application JavaScript
+   KODSPOT — Shared Application JavaScript
    Auth, API, Toast, Nav, Retry, Utilities
+   Module-aware routing: /{org}/{module}/{page}
    ======================================================================== */
 'use strict';
 window.App = (function () {
   const API = '/api';
 
-  // ─── Org-Aware Routing ───
+  // ─── Valid Module Codes ───
+  var VALID_MODULES = ['hk', 'ele', 'civil', 'asset', 'complaints'];
+
+  // ─── Org & Module Routing ───
   var NON_ORG_PREFIXES = ['superadmin-login', 'superadmin-dashboard', 's', 'api', 'scan'];
 
   function getOrgSlug() {
-    // Try URL path first: /kle/admin-dashboard → 'kle'
     var parts = location.pathname.split('/').filter(Boolean);
     if (parts.length >= 2 && NON_ORG_PREFIXES.indexOf(parts[0]) === -1) {
       var candidate = parts[0];
       if (/^[a-z0-9][a-z0-9-]*$/.test(candidate)) return candidate;
     }
-    // Fallback to sessionStorage (set during login)
     var stored = sessionStorage.getItem('orgSlug');
     if (stored && /^[a-z0-9][a-z0-9-]*$/.test(stored)) return stored;
     return null;
   }
 
+  function getModule() {
+    // URL: /{org}/{module}/{page} — module is parts[1]
+    var parts = location.pathname.split('/').filter(Boolean);
+    if (parts.length >= 2) {
+      var mod = parts[1];
+      if (VALID_MODULES.indexOf(mod) !== -1) return mod;
+    }
+    // Fallback to sessionStorage
+    var stored = sessionStorage.getItem('activeModule');
+    if (stored && VALID_MODULES.indexOf(stored) !== -1) return stored;
+    return 'hk'; // default
+  }
+
+  // Legacy: orgPath still works but routes through module
   function orgPath(page) {
     var slug = getOrgSlug();
-    return slug ? '/' + slug + '/' + page : '/' + page;
+    var mod = getModule();
+    return slug ? '/' + slug + '/' + mod + '/' + page : '/' + page;
+  }
+
+  // Explicit module path builder
+  function modulePath(page, mod) {
+    var slug = getOrgSlug();
+    mod = mod || getModule();
+    return slug ? '/' + slug + '/' + mod + '/' + page : '/' + page;
   }
 
   // ─── DOM Helpers ───
@@ -133,8 +157,9 @@ window.App = (function () {
   // ─── Logout ───
   function logout() {
     var slug = getOrgSlug();
+    var mod = getModule();
     sessionStorage.clear();
-    location.href = slug ? '/' + slug + '/admin-login' : '/admin-login';
+    location.href = slug ? '/' + slug + '/' + mod + '/admin-login' : '/admin-login';
   }
 
   function logoutSA() {
@@ -144,9 +169,10 @@ window.App = (function () {
 
   function logoutSup() {
     var slug = getOrgSlug();
+    var mod = getModule();
     sessionStorage.removeItem('sup_token');
     sessionStorage.removeItem('sup_user');
-    location.href = slug ? '/' + slug + '/supervisor-login' : '/supervisor-login';
+    location.href = slug ? '/' + slug + '/' + mod + '/supervisor-login' : '/supervisor-login';
   }
 
   // ─── Toast Notifications ───
@@ -224,6 +250,13 @@ window.App = (function () {
       location.href = '/superadmin-dashboard'; return false;
     }
 
+    // Store active module from URL
+    var mod = getModule();
+    sessionStorage.setItem('activeModule', mod);
+
+    // Init module PWA (manifest + SW)
+    initModulePWA();
+
     // Show org name in topbar
     _applyOrgBrand();
 
@@ -261,7 +294,29 @@ window.App = (function () {
   function initSupervisor() {
     if (!getSupToken()) { location.href = orgPath('supervisor-login'); return false; }
     var user = getSupUser();
+
+    // Store active module from URL
+    var mod = getModule();
+    sessionStorage.setItem('activeModule', mod);
+
+    // Init module PWA (manifest + SW)
+    initModulePWA();
+
     _applyOrgBrand();
+
+    // Rewrite supervisor nav links to module-scoped paths
+    var svNav = $('sv-nav');
+    if (svNav) {
+      var links = svNav.querySelectorAll('a[href]');
+      for (var i = 0; i < links.length; i++) {
+        var page = links[i].getAttribute('href').replace(/^\//, '');
+        if (page) links[i].href = orgPath(page);
+      }
+    }
+    // Also fix standalone links like "Scan Next Location"
+    var scanNext = $('scanNextLink');
+    if (scanNext) scanNext.href = orgPath('supervisor-scan');
+
     _buildUserMenu(user, 'supervisor');
     return true;
   }
@@ -720,10 +775,36 @@ window.App = (function () {
     if (_notifInterval) { clearInterval(_notifInterval); _notifInterval = null; }
   }
 
+  // ─── Dynamic Manifest & SW Registration ───
+  function initModulePWA() {
+    var slug = getOrgSlug();
+    var mod = getModule();
+    if (!slug || !mod) return;
+
+    var scope = '/' + slug + '/' + mod + '/';
+
+    // Set manifest link dynamically
+    var manifestLink = document.querySelector('link[rel="manifest"]');
+    if (manifestLink) {
+      manifestLink.href = scope + 'manifest.json';
+    } else {
+      var link = document.createElement('link');
+      link.rel = 'manifest';
+      link.href = scope + 'manifest.json';
+      document.head.appendChild(link);
+    }
+
+    // Register module-scoped service worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register(scope + 'sw.js', { scope: scope }).catch(function() {});
+    }
+  }
+
   // ─── Public API ───
   return {
     $: $, esc: esc, fmtDate: fmtDate, fmtDateShort: fmtDateShort,
     getOrgSlug: getOrgSlug, orgPath: orgPath,
+    getModule: getModule, modulePath: modulePath,
     getToken: getToken, getSupToken: getSupToken, getUser: getUser, getSupUser: getSupUser,
     adminHeaders: adminHeaders, supHeaders: supHeaders,
     apiFetch: apiFetch, apiFetchJson: apiFetchJson,
@@ -731,6 +812,7 @@ window.App = (function () {
     logout: logout, logoutSA: logoutSA, logoutSup: logoutSup,
     toast: toast, confirmDialog: confirmDialog,
     initAdmin: initAdmin, initSupervisor: initSupervisor,
+    initModulePWA: initModulePWA,
     buildUserMenu: _buildUserMenu,
     initNotifications: initNotifications, stopNotifications: stopNotifications,
     showSkeleton: showSkeleton, showSkeletonCards: showSkeletonCards, showSkeletonRows: showSkeletonRows,
@@ -741,7 +823,8 @@ window.App = (function () {
   };
 })();
 
-// Register service worker for PWA install (desktop + mobile)
+// Register service worker — for module-scoped pages, initModulePWA handles it
+// This fallback is for non-module pages (landing, superadmin, etc.)
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(function() {});
 }

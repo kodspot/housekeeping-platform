@@ -14,10 +14,11 @@ model Organization {
   slug String  @unique
   type String? // "hospital", "hotel", "office", etc.
 
-  address String?
-  phone   String?
-  email   String?
-  logoUrl String?
+  address        String?
+  phone          String?
+  email          String?
+  logoUrl        String?
+  enabledModules String[] @default(["hk"])
 
   status OrgStatus @default(ACTIVE)
 

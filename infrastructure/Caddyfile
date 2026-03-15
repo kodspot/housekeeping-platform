@@ -10,12 +10,13 @@ app.{$DOMAIN:kodspot.in} {
 
     encode gzip
 
-    # No-cache for org-scoped pages (security-sensitive, match /:slug/admin-* etc.)
-    @orgAdmin path_regexp orgAdmin ^/[a-z0-9-]+/admin
+    # No-cache for org-scoped pages (security-sensitive)
+    # Matches both /:slug/admin-* (legacy) and /:slug/:mod/admin-* (new)
+    @orgAdmin path_regexp orgAdmin ^/[a-z0-9-]+/([a-z]+/)?admin
     header @orgAdmin Cache-Control "no-cache, no-store, must-revalidate"
     header @orgAdmin X-Robots-Tag "noindex, nofollow"
 
-    @orgSupervisor path_regexp orgSup ^/[a-z0-9-]+/supervisor
+    @orgSupervisor path_regexp orgSup ^/[a-z0-9-]+/([a-z]+/)?supervisor
     header @orgSupervisor Cache-Control "no-cache, no-store, must-revalidate"
     header @orgSupervisor X-Robots-Tag "noindex, nofollow"
 
@@ -25,6 +26,9 @@ app.{$DOMAIN:kodspot.in} {
     # Service worker + manifest must never be cached
     header /sw.js Cache-Control "no-cache, no-store, must-revalidate"
     header /site.webmanifest Cache-Control "no-cache, no-store, must-revalidate"
+    # Dynamic module SW/manifest have cache headers set by API, but ensure no caching for SW
+    @moduleSw path_regexp modSw ^/[a-z0-9-]+/[a-z]+/sw\.js$
+    header @moduleSw Cache-Control "no-cache, no-store, must-revalidate"
 
     # Long cache for static assets
     header /css/* Cache-Control "public, max-age=86400"

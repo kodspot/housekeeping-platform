@@ -24,23 +24,26 @@ async function superadminRoutes(fastify, opts) {
       orderBy: { createdAt: 'desc' },
       select: {
         id: true, name: true, slug: true, type: true, address: true, phone: true, email: true,
-        logoUrl: true, status: true, createdAt: true, updatedAt: true,
+        logoUrl: true, status: true, enabledModules: true, createdAt: true, updatedAt: true,
         _count: { select: { users: true, workers: true, locations: true } }
       }
     });
   });
 
   fastify.post('/superadmin/organizations', async (request, reply) => {
+    const VALID_MODULES = ['hk', 'ele', 'civil', 'asset', 'complaints'];
     const schema = z.object({
       name: z.string().min(1).max(200).trim(),
       slug: z.string().min(1).max(50).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug must be lowercase letters, numbers, and hyphens only').optional(),
       type: z.string().max(50).optional(),
       address: z.string().max(500).optional(),
       phone: z.string().max(20).optional(),
-      email: z.string().email().max(200).optional()
+      email: z.string().email().max(200).optional(),
+      enabledModules: z.array(z.enum(VALID_MODULES)).min(1).optional()
     });
 
     const data = schema.parse(request.body);
+    if (!data.enabledModules) data.enabledModules = ['hk'];
 
     // Use provided slug or auto-generate from name
     let slug = data.slug || data.name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').substring(0, 50);
@@ -69,6 +72,7 @@ async function superadminRoutes(fastify, opts) {
 
   fastify.patch('/superadmin/organizations/:id', async (request, reply) => {
     const { id } = request.params;
+    const VALID_MODULES = ['hk', 'ele', 'civil', 'asset', 'complaints'];
     const schema = z.object({
       name: z.string().min(1).max(200).trim().optional(),
       slug: z.string().min(1).max(50).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug must be lowercase letters, numbers, and hyphens (no leading/trailing hyphens)').optional(),
@@ -76,7 +80,8 @@ async function superadminRoutes(fastify, opts) {
       address: z.string().max(500).optional(),
       phone: z.string().max(20).optional(),
       email: z.string().email().max(200).optional().or(z.literal('')),
-      status: z.enum(['ACTIVE', 'SUSPENDED']).optional()
+      status: z.enum(['ACTIVE', 'SUSPENDED']).optional(),
+      enabledModules: z.array(z.enum(VALID_MODULES)).min(1).optional()
     });
 
     const data = schema.parse(request.body);

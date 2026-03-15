@@ -8,21 +8,105 @@
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
 <link rel="manifest" href="/site.webmanifest">
 <meta name="theme-color" content="#1a7f64">
-<title>Kodspot Housekeeping</title>
+<title>Kodspot</title>
 <link rel="stylesheet" href="/css/design-system.css">
+<style>
+  .landing-org-input { display:flex; gap:.5rem; margin-bottom:1.2rem; }
+  .landing-org-input input { flex:1; font-family:monospace; text-transform:lowercase; }
+  .landing-org-input button { white-space:nowrap; }
+  .landing-saved { display:flex; align-items:center; justify-content:space-between; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md); padding:.6rem .8rem; margin-bottom:1rem; font-size:.85rem; }
+  .landing-saved-name { font-weight:600; color:var(--text-primary); }
+  .landing-saved-slug { font-family:monospace; color:var(--text-muted); font-size:.8rem; }
+  .landing-saved-change { color:var(--primary); cursor:pointer; font-size:.8rem; border:none; background:none; text-decoration:underline; }
+  .landing-cards { display:flex; flex-direction:column; gap:.75rem; }
+  .landing-card { text-decoration:none; color:inherit; }
+  .landing-card-inner { border:1px solid var(--border); border-radius:var(--radius-md); padding:1rem 1.2rem; transition:box-shadow .15s, border-color .15s; cursor:pointer; }
+  .landing-card-inner:hover { border-color:var(--primary); box-shadow:0 2px 8px rgba(0,0,0,.08); }
+  .landing-card-title { font-size:1.05rem; font-weight:600; margin-bottom:.25rem; }
+  .landing-card-desc { font-size:.82rem; color:var(--text-muted); }
+  .landing-divider { text-align:center; color:var(--text-muted); font-size:.78rem; margin:.6rem 0; }
+</style>
 </head>
 <body class="auth-layout">
   <div class="landing-container">
     <h1 class="landing-title">Kodspot</h1>
-    <p class="landing-subtitle">Facility cleaning management system</p>
-    <a href="/superadmin-login" class="landing-card" style="border-left:4px solid var(--sa-primary)">
-      <div class="landing-card-title" style="color:var(--sa-primary)">Super Admin</div>
-      <div class="landing-card-desc">System administration and organization management</div>
-    </a>
-    <p style="margin-top:1rem;font-size:.82rem;color:var(--text-muted);text-align:center">Admin and Supervisor logins are accessible via your organization URL</p>
+    <p class="landing-subtitle">Facility management platform</p>
+
+    <!-- Org context section -->
+    <div id="orgSection">
+      <div id="savedOrg" style="display:none" class="landing-saved">
+        <div><span class="landing-saved-name" id="savedOrgName"></span><br><span class="landing-saved-slug" id="savedOrgSlug"></span></div>
+        <button class="landing-saved-change" onclick="changeOrg()">Change</button>
+      </div>
+      <div id="orgInput" class="landing-org-input">
+        <input class="form-input" type="text" id="orgSlugField" placeholder="Organization code (e.g. kle)" maxlength="50" pattern="[a-z0-9-]+">
+        <button class="btn btn-primary" onclick="setOrg()" type="button">Go</button>
+      </div>
+      <div id="orgError" class="error-msg" style="display:none;margin-bottom:.75rem"></div>
+    </div>
+
+    <!-- Role cards (shown after org is set) -->
+    <div id="roleCards" class="landing-cards" style="display:none">
+      <a id="orgHomeLink" class="landing-card">
+        <div class="landing-card-inner" style="border-left:3px solid var(--primary)">
+          <div class="landing-card-title" style="color:var(--primary)">Open Dashboard</div>
+          <div class="landing-card-desc">Go to your organisation&rsquo;s module selection</div>
+        </div>
+      </a>
+    </div>
   </div>
   <footer style="position:fixed;bottom:0;left:0;right:0;text-align:center;padding:.8rem;font-size:.75rem;color:var(--text-muted)">
-    <a href="/privacy" style="color:var(--text-muted);text-decoration:underline">Privacy Policy</a> · <a href="/terms" style="color:var(--text-muted);text-decoration:underline">Terms of Service</a> · © 2026 Kodspot
+    <a href="/privacy" style="color:var(--text-muted);text-decoration:underline">Privacy Policy</a> · <a href="/terms" style="color:var(--text-muted);text-decoration:underline">Terms of Service</a> · &copy; 2026 Kodspot
   </footer>
+  <script>
+    var savedSlug = localStorage.getItem('kodspot_org_slug');
+    var savedName = localStorage.getItem('kodspot_org_name');
+
+    function showOrgCards(slug) {
+      document.getElementById('orgHomeLink').href = '/' + slug + '/';
+      document.getElementById('roleCards').style.display = '';
+    }
+
+    function showSavedOrg() {
+      document.getElementById('savedOrgName').textContent = savedName || savedSlug;
+      document.getElementById('savedOrgSlug').textContent = '/' + savedSlug;
+      document.getElementById('savedOrg').style.display = '';
+      document.getElementById('orgInput').style.display = 'none';
+      showOrgCards(savedSlug);
+    }
+
+    function changeOrg() {
+      localStorage.removeItem('kodspot_org_slug');
+      localStorage.removeItem('kodspot_org_name');
+      savedSlug = null; savedName = null;
+      document.getElementById('savedOrg').style.display = 'none';
+      document.getElementById('orgInput').style.display = '';
+      document.getElementById('roleCards').style.display = 'none';
+      document.getElementById('orgSlugField').value = '';
+      document.getElementById('orgSlugField').focus();
+    }
+
+    async function setOrg() {
+      var slug = document.getElementById('orgSlugField').value.trim().toLowerCase();
+      if (!slug) return;
+      var errEl = document.getElementById('orgError');
+      errEl.style.display = 'none';
+      try {
+        var res = await fetch('/api/org/' + encodeURIComponent(slug));
+        if (!res.ok) { errEl.textContent = 'Organization not found. Check the code and try again.'; errEl.style.display = ''; return; }
+        var org = await res.json();
+        savedSlug = org.slug; savedName = org.name;
+        localStorage.setItem('kodspot_org_slug', org.slug);
+        localStorage.setItem('kodspot_org_name', org.name);
+        // Redirect to org home which shows module tiles
+        location.href = '/' + org.slug + '/';
+      } catch(e) { errEl.textContent = 'Network error. Please try again.'; errEl.style.display = ''; }
+    }
+
+    document.getElementById('orgSlugField').addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); setOrg(); } });
+
+    // On load: if org is saved, show cards immediately
+    if (savedSlug) { showSavedOrg(); }
+  </script>
 </body>
 </html>

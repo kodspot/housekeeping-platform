@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="manifest" href="/site.webmanifest">
+<meta name="theme-color" content="#1a7f64">
+<title>Kodspot</title>
+<link rel="stylesheet" href="/css/design-system.css">
+<style>
+.mod-home{max-width:420px;margin:0 auto;padding:2rem 1rem;text-align:center}
+.mod-title{font-size:1.3rem;font-weight:700;color:var(--text);margin-bottom:.15rem}
+.mod-subtitle{font-size:.82rem;color:var(--text-muted);margin-bottom:.35rem}
+.mod-org{font-size:.72rem;color:var(--text-light);margin-bottom:1.5rem}
+.role-grid{display:flex;flex-direction:column;gap:.75rem}
+.role-card{text-decoration:none;color:inherit;border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.15rem 1.25rem;text-align:left;transition:all .15s;cursor:pointer;background:var(--surface);display:flex;align-items:center;gap:1rem}
+.role-card:hover{border-color:var(--primary);box-shadow:0 2px 12px rgba(0,0,0,.08)}
+.role-icon{font-size:1.5rem;flex-shrink:0}
+.role-info{flex:1}
+.role-label{font-size:1rem;font-weight:600;color:var(--text)}
+.role-desc{font-size:.75rem;color:var(--text-muted);margin-top:.1rem}
+.mod-back{margin-top:1.25rem;font-size:.78rem}
+.mod-install-hint{margin-top:1.5rem;padding:.75rem;background:var(--surface);border:1px dashed var(--border);border-radius:var(--radius);font-size:.72rem;color:var(--text-muted)}
+.mod-loading{padding:3rem 1rem;text-align:center;color:var(--text-muted)}
+</style>
+</head>
+<body class="auth-layout">
+<div class="mod-home" id="root">
+  <div class="mod-loading">
+    <div class="skeleton" style="width:50%;height:1.3rem;margin:0 auto .5rem"></div>
+    <div class="skeleton" style="width:70%;height:.8rem;margin:0 auto 1.5rem"></div>
+    <div class="skeleton" style="height:70px;border-radius:var(--radius-lg);margin-bottom:.75rem"></div>
+    <div class="skeleton" style="height:70px;border-radius:var(--radius-lg)"></div>
+  </div>
+</div>
+<footer style="position:fixed;bottom:0;left:0;right:0;text-align:center;padding:.8rem;font-size:.75rem;color:var(--text-muted)">
+  <a href="/privacy" style="color:var(--text-muted);text-decoration:underline">Privacy Policy</a> · <a href="/terms" style="color:var(--text-muted);text-decoration:underline">Terms of Service</a>
+</footer>
+<script>
+(function() {
+  var MODULE_META = {
+    hk:         { label: 'Housekeeping', icon: '🧹', color: '#1a7f64', roles: [
+      { key: 'admin', label: 'Admin', icon: '🔑', desc: 'Manage facility, workers, locations & reports', page: 'admin-login' },
+      { key: 'supervisor', label: 'Supervisor', icon: '👷', desc: 'Scan QR, record cleaning & manage tickets', page: 'supervisor-login' }
+    ]},
+    ele:        { label: 'Electrical', icon: '⚡', color: '#d97706', roles: [
+      { key: 'admin', label: 'Admin', icon: '🔑', desc: 'Manage electrical maintenance & staff', page: 'admin-login' },
+      { key: 'engineer', label: 'Engineer', icon: '🔧', desc: 'Handle electrical tasks & inspections', page: 'supervisor-login' }
+    ]},
+    civil:      { label: 'Civil', icon: '🏗️', color: '#6366f1', roles: [
+      { key: 'admin', label: 'Admin', icon: '🔑', desc: 'Manage civil maintenance operations', page: 'admin-login' },
+      { key: 'engineer', label: 'Engineer', icon: '🏗️', desc: 'Handle civil tasks & inspections', page: 'supervisor-login' }
+    ]},
+    asset:      { label: 'Assets', icon: '📦', color: '#0891b2', roles: [
+      { key: 'admin', label: 'Admin', icon: '🔑', desc: 'Track & manage facility assets', page: 'admin-login' },
+      { key: 'manager', label: 'Manager', icon: '📋', desc: 'Handle asset tasks & audits', page: 'supervisor-login' }
+    ]},
+    complaints: { label: 'Complaints', icon: '📝', color: '#e11d48', roles: [
+      { key: 'admin', label: 'Admin', icon: '🔑', desc: 'Manage & resolve complaints', page: 'admin-login' }
+    ]}
+  };
+
+  var parts = location.pathname.split('/').filter(Boolean);
+  var slug = parts[0]; var mod = parts[1];
+  if (!slug || !mod) { location.href = '/'; return; }
+
+  var meta = MODULE_META[mod];
+  if (!meta) { location.href = '/' + slug; return; }
+
+  // Set dynamic manifest for this module
+  var manifestLink = document.querySelector('link[rel="manifest"]');
+  if (manifestLink) manifestLink.href = '/' + slug + '/' + mod + '/manifest.json';
+
+  // Register module SW
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/' + slug + '/' + mod + '/sw.js', { scope: '/' + slug + '/' + mod + '/' }).catch(function(){});
+  }
+
+  fetch('/api/org/' + encodeURIComponent(slug)).then(function(r) {
+    if (!r.ok) { document.getElementById('root').innerHTML = '<div class="mod-loading"><p style="color:var(--danger)">Organization not found</p></div>'; return null; }
+    return r.json();
+  }).then(function(org) {
+    if (!org) return;
+    var modules = org.enabledModules || ['hk'];
+    if (modules.indexOf(mod) === -1) {
+      document.getElementById('root').innerHTML = '<div class="mod-loading"><p style="color:var(--danger)">Module not available</p><a href="/' + slug + '" style="color:var(--primary);font-size:.85rem">Back</a></div>';
+      return;
+    }
+
+    document.title = meta.label + ' — ' + org.name;
+    var themeTag = document.querySelector('meta[name="theme-color"]');
+    if (themeTag) themeTag.content = meta.color;
+
+    var html = '<div style="font-size:2.5rem;margin-bottom:.5rem">' + meta.icon + '</div>' +
+      '<div class="mod-title">' + meta.label + '</div>' +
+      '<div class="mod-subtitle">Sign in to continue</div>' +
+      '<div class="mod-org">' + esc(org.name) + ' · Powered by Kodspot</div>' +
+      '<div class="role-grid">' +
+      meta.roles.map(function(r) {
+        return '<a href="/' + slug + '/' + mod + '/' + r.page + '" class="role-card" style="border-left:3px solid ' + meta.color + '">' +
+          '<span class="role-icon">' + r.icon + '</span>' +
+          '<div class="role-info"><div class="role-label">' + r.label + '</div><div class="role-desc">' + r.desc + '</div></div>' +
+        '</a>';
+      }).join('') +
+      '</div>' +
+      (modules.length > 1 ? '<div class="mod-back"><a href="/' + slug + '" style="color:var(--primary)">← All modules</a></div>' : '') +
+      '<div class="mod-install-hint">💡 Tip: Use your browser\'s "Add to Home Screen" or "Install App" to install this as a standalone app on your device.</div>';
+
+    document.getElementById('root').innerHTML = html;
+  }).catch(function() {
+    document.getElementById('root').innerHTML = '<div class="mod-loading"><p style="color:var(--danger)">Connection error</p></div>';
+  });
+
+  function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+})();
+</script>
+</body>
+</html>

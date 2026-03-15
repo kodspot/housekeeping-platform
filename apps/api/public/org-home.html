@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<meta name="theme-color" content="#1a7f64">
+<title>Kodspot</title>
+<link rel="stylesheet" href="/css/design-system.css">
+<style>
+.org-home{max-width:520px;margin:0 auto;padding:2rem 1rem;text-align:center}
+.org-name{font-size:1.5rem;font-weight:700;color:var(--text);margin-bottom:.25rem}
+.org-sub{font-size:.82rem;color:var(--text-muted);margin-bottom:1.5rem}
+.mod-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+.mod-card{text-decoration:none;color:inherit;border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem 1rem;text-align:center;transition:all .15s;cursor:pointer;background:var(--surface)}
+.mod-card:hover{border-color:var(--primary);box-shadow:0 2px 12px rgba(0,0,0,.08);transform:translateY(-1px)}
+.mod-icon{font-size:2rem;display:block;margin-bottom:.4rem}
+.mod-label{font-size:.95rem;font-weight:600;color:var(--text)}
+.mod-desc{font-size:.72rem;color:var(--text-muted);margin-top:.15rem}
+.mod-install{font-size:.65rem;color:var(--primary);margin-top:.4rem;display:block}
+.org-loading{padding:3rem 1rem;text-align:center;color:var(--text-muted)}
+@media(max-width:400px){.mod-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body class="auth-layout">
+<div class="org-home" id="root">
+  <div class="org-loading">
+    <div class="skeleton" style="width:60%;height:1.5rem;margin:0 auto .5rem"></div>
+    <div class="skeleton" style="width:40%;height:.9rem;margin:0 auto 1.5rem"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+      <div class="skeleton" style="height:120px;border-radius:var(--radius-lg)"></div>
+      <div class="skeleton" style="height:120px;border-radius:var(--radius-lg)"></div>
+    </div>
+  </div>
+</div>
+<footer style="position:fixed;bottom:0;left:0;right:0;text-align:center;padding:.8rem;font-size:.75rem;color:var(--text-muted)">
+  <a href="/privacy" style="color:var(--text-muted);text-decoration:underline">Privacy Policy</a> · <a href="/terms" style="color:var(--text-muted);text-decoration:underline">Terms of Service</a> · &copy; 2026 Kodspot
+</footer>
+<script>
+(function() {
+  var MODULE_META = {
+    hk:         { label: 'Housekeeping', icon: '🧹', desc: 'Cleaning & maintenance', color: '#1a7f64' },
+    ele:        { label: 'Electrical',   icon: '⚡', desc: 'Electrical services',    color: '#d97706' },
+    civil:      { label: 'Civil',        icon: '🏗️', desc: 'Civil maintenance',      color: '#6366f1' },
+    asset:      { label: 'Assets',       icon: '📦', desc: 'Asset management',       color: '#0891b2' },
+    complaints: { label: 'Complaints',   icon: '📝', desc: 'Complaint management',   color: '#e11d48' }
+  };
+
+  var slug = location.pathname.split('/').filter(Boolean)[0];
+  if (!slug) { location.href = '/'; return; }
+
+  fetch('/api/org/' + encodeURIComponent(slug)).then(function(r) {
+    if (!r.ok) { document.getElementById('root').innerHTML = '<div class="org-loading"><p style="color:var(--danger)">Organization not found</p><a href="/" style="color:var(--primary);font-size:.85rem">Back to Home</a></div>'; return null; }
+    return r.json();
+  }).then(function(org) {
+    if (!org) return;
+    var modules = org.enabledModules || ['hk'];
+    document.title = org.name + ' — Kodspot';
+
+    var html = '<div class="org-name">' + esc(org.name) + '</div>' +
+      '<div class="org-sub">Select a service to continue</div>' +
+      '<div class="mod-grid">' +
+      modules.map(function(m) {
+        var meta = MODULE_META[m] || { label: m, icon: '📋', desc: '', color: '#1a7f64' };
+        return '<a href="/' + slug + '/' + m + '/" class="mod-card" style="border-left:3px solid ' + meta.color + '">' +
+          '<span class="mod-icon">' + meta.icon + '</span>' +
+          '<span class="mod-label">' + meta.label + '</span>' +
+          '<span class="mod-desc">' + meta.desc + '</span>' +
+          '<span class="mod-install">Open App →</span>' +
+        '</a>';
+      }).join('') +
+      '</div>';
+
+    document.getElementById('root').innerHTML = html;
+  }).catch(function() {
+    document.getElementById('root').innerHTML = '<div class="org-loading"><p style="color:var(--danger)">Network error</p></div>';
+  });
+
+  function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+})();
+</script>
+</body>
+</html>

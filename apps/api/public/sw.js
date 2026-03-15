@@ -1,7 +1,7 @@
 // Kodspot Housekeeping — Service Worker
 // Enables PWA install on desktop & mobile, provides offline fallback
 
-const CACHE_NAME = 'kodspot-v1';
+const CACHE_NAME = 'kodspot-v2';
 const OFFLINE_URL = '/offline.html';
 
 // Pre-cache essential assets on install

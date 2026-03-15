@@ -154,9 +154,9 @@
     </div>
     <div class="table-wrap">
       <table class="sa-table"><thead><tr>
-        <th>Name</th><th>Type</th><th class="hide-mobile">Phone</th><th>Status</th>
+        <th>Name</th><th>Type</th><th class="hide-mobile">Modules</th><th class="hide-mobile">Phone</th><th>Status</th>
         <th class="hide-mobile">Users</th><th class="hide-mobile">Workers</th><th>Actions</th>
-      </tr></thead><tbody id="orgBody"><tr><td colspan="7" class="loading-center">Loading…</td></tr></tbody></table>
+      </tr></thead><tbody id="orgBody"><tr><td colspan="8" class="loading-center">Loading…</td></tr></tbody></table>
     </div>
   </div>
 
@@ -260,6 +260,17 @@
       </div>
       <div class="form-group"><label class="form-label">Email</label><input class="form-input" type="email" id="orgEmail" maxlength="200"></div>
       <div class="form-group"><label class="form-label">Address</label><textarea class="form-textarea" id="orgAddress" rows="2" maxlength="500"></textarea></div>
+      <div class="form-group">
+        <label class="form-label">Enabled Modules *</label>
+        <div id="orgModules" style="display:flex;flex-wrap:wrap;gap:.5rem .75rem">
+          <label style="display:flex;align-items:center;gap:.3rem;font-size:.82rem;cursor:pointer"><input type="checkbox" value="hk" checked> 🧹 Housekeeping</label>
+          <label style="display:flex;align-items:center;gap:.3rem;font-size:.82rem;cursor:pointer"><input type="checkbox" value="ele"> ⚡ Electrical</label>
+          <label style="display:flex;align-items:center;gap:.3rem;font-size:.82rem;cursor:pointer"><input type="checkbox" value="civil"> 🏗️ Civil</label>
+          <label style="display:flex;align-items:center;gap:.3rem;font-size:.82rem;cursor:pointer"><input type="checkbox" value="asset"> 📦 Assets</label>
+          <label style="display:flex;align-items:center;gap:.3rem;font-size:.82rem;cursor:pointer"><input type="checkbox" value="complaints"> 📝 Complaints</label>
+        </div>
+        <small style="color:#666">Select which service modules are available for this organization</small>
+      </div>
       <div class="form-group" id="orgStatusGroup" style="display:none"><label class="form-label">Status</label>
         <select class="form-select" id="orgStatus"><option value="ACTIVE">Active</option><option value="SUSPENDED">Suspended</option></select>
       </div>
@@ -447,14 +458,17 @@ async function loadOrgs() {
   allOrgs = orgs;
   populateOrgSelects();
   if (!orgs.length) {
-    $('orgBody').innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-state-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".5"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/><path d="M9 9v.01"/><path d="M9 12v.01"/><path d="M9 15v.01"/><path d="M9 18v.01"/></svg></div>No organizations found</div></td></tr>';
+    $('orgBody').innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="empty-state-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".5"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/><path d="M9 9v.01"/><path d="M9 12v.01"/><path d="M9 15v.01"/><path d="M9 18v.01"/></svg></div>No organizations found</div></td></tr>';
     return;
   }
   $('orgBody').innerHTML = orgs.map(function(o) {
     var sCls = o.status === 'ACTIVE' ? 'status-active' : o.status === 'SUSPENDED' ? 'status-suspended' : 'status-deleted';
+    var MOD_LABELS = { hk: '🧹', ele: '⚡', civil: '🏗️', asset: '📦', complaints: '📝' };
+    var mods = (o.enabledModules || ['hk']).map(function(m) { return '<span title="' + m + '" style="font-size:.9rem">' + (MOD_LABELS[m] || m) + '</span>'; }).join(' ');
     return '<tr>' +
       '<td class="name-cell"><b>' + esc(o.name) + '</b></td>' +
       '<td>' + esc(o.type || '—') + '</td>' +
+      '<td class="hide-mobile">' + mods + '</td>' +
       '<td class="hide-mobile">' + esc(o.phone || '—') + '</td>' +
       '<td><span class="status-badge ' + sCls + '">' + o.status + '</span></td>' +
       '<td class="hide-mobile">' + ((o._count && o._count.users) || 0) + '</td>' +
@@ -494,8 +508,19 @@ function openOrgModal() {
   $('orgModalTitle').textContent = 'New Organization';
   $('orgStatusGroup').style.display = 'none';
   $('orgSlug').readOnly = false;
+  setModuleCheckboxes(['hk']);
   App.hideError('orgError');
   App.openModal('orgModal');
+}
+
+function getModuleCheckboxes() {
+  var checked = [];
+  document.querySelectorAll('#orgModules input[type=checkbox]').forEach(function(cb) { if (cb.checked) checked.push(cb.value); });
+  return checked;
+}
+function setModuleCheckboxes(modules) {
+  var list = modules || ['hk'];
+  document.querySelectorAll('#orgModules input[type=checkbox]').forEach(function(cb) { cb.checked = list.indexOf(cb.value) !== -1; });
 }
 
 // Auto-generate slug from name as user types (only for new orgs)
@@ -518,6 +543,7 @@ async function editOrg(id) {
   $('orgAddress').value = org.address || '';
   $('orgStatus').value = org.status;
   $('orgStatusGroup').style.display = '';
+  setModuleCheckboxes(org.enabledModules || ['hk']);
   App.hideError('orgError');
   App.openModal('orgModal');
 }
@@ -525,7 +551,8 @@ async function editOrg(id) {
 $('orgForm').addEventListener('submit', async function(e) {
   e.preventDefault();
   var id = $('orgId').value;
-  var body = { name: $('orgName').value.trim(), slug: $('orgSlug').value.trim().toLowerCase(), type: $('orgType').value };
+  var body = { name: $('orgName').value.trim(), slug: $('orgSlug').value.trim().toLowerCase(), type: $('orgType').value, enabledModules: getModuleCheckboxes() };
+  if (!body.enabledModules.length) { App.showError('orgError', 'Select at least one module'); return; }
   var v = $('orgPhone').value.trim(); if (v) body.phone = v; else body.phone = '';
   v = $('orgEmail').value.trim(); if (v) body.email = v; else body.email = '';
   v = $('orgAddress').value.trim(); if (v) body.address = v; else body.address = '';

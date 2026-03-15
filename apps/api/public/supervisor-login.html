@@ -31,7 +31,13 @@
 <script src="/js/app.js"></script>
 <script>
 var orgSlug = App.getOrgSlug();
+var mod = App.getModule();
+
+// Redirect if already logged in as supervisor
 if (sessionStorage.getItem('sup_token')) location.href = App.orgPath('supervisor-scan');
+
+// Initialise module PWA (dynamic manifest + service worker)
+App.initModulePWA();
 
 // Show org branding if accessed via org URL
 if (orgSlug) {
@@ -44,6 +50,7 @@ if (orgSlug) {
     }
   }).catch(function() {});
 }
+
 document.getElementById('loginForm').addEventListener('submit', async function(e) {
   e.preventDefault();
   var btn = document.getElementById('submitBtn'); btn.disabled = true; btn.textContent = 'Signing in…';
@@ -64,7 +71,8 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
     var slug = data.user.orgSlug || orgSlug;
     if (slug) sessionStorage.setItem('orgSlug', slug);
     if (data.user.orgName) sessionStorage.setItem('orgName', data.user.orgName);
-    location.href = slug ? '/' + slug + '/supervisor-scan' : '/supervisor-scan';
+    sessionStorage.setItem('activeModule', mod);
+    location.href = App.orgPath('supervisor-scan');
   } catch (err) {
     document.getElementById('error').textContent = err.message;
     document.getElementById('error').style.display = 'block';

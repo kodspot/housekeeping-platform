@@ -27,7 +27,7 @@ async function publicRoutes(fastify, opts) {
         orgId: true,
         isActive: true,
         parent: { select: { name: true } },
-        org: { select: { name: true, status: true } }
+        org: { select: { name: true, status: true, slug: true, enabledModules: true } }
       }
     });
 
@@ -44,7 +44,9 @@ async function publicRoutes(fastify, opts) {
       name: location.name,
       type: location.type,
       parentName: location.parent?.name || null,
-      orgName: location.org.name
+      orgName: location.org.name,
+      orgSlug: location.org.slug,
+      enabledModules: location.org.enabledModules || ['hk']
     };
   });
 

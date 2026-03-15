@@ -98,12 +98,21 @@ body{background:var(--bg);min-height:100dvh}
   try { supToken = sessionStorage.getItem('sup_token'); } catch(e) {}
 
   if (supToken) {
-    // Supervisor: redirect to cleaning flow
+    // Supervisor: redirect to cleaning flow (module-scoped)
     var slug = sessionStorage.getItem('orgSlug') || '';
-    var cleanPath = slug ? '/' + slug + '/supervisor-clean' : '/supervisor-clean';
+    var mod = sessionStorage.getItem('activeModule') || 'hk';
+    var cleanPath = slug ? '/' + slug + '/' + mod + '/supervisor-clean' : '/supervisor-clean';
     location.href = cleanPath + '?qr=' + encodeURIComponent(qrCode);
     return;
   }
+
+  var MODULE_META = {
+    hk: { label: 'Housekeeping', icon: '🧹', desc: 'Report cleaning or maintenance issues' },
+    ele: { label: 'Electrical', icon: '⚡', desc: 'Report electrical problems' },
+    civil: { label: 'Civil', icon: '🏗️', desc: 'Report civil or structural issues' },
+    asset: { label: 'Assets', icon: '📦', desc: 'Report asset-related issues' },
+    complaints: { label: 'Complaints', icon: '📝', desc: 'General facility complaints' }
+  };
 
   // Guest user: fetch location info and show complaint form
   loadLocation(qrCode);
@@ -123,7 +132,13 @@ body{background:var(--bg);min-height:100dvh}
         return;
       }
       var loc = await res.json();
-      showComplaintForm(loc, code);
+      var modules = loc.enabledModules || ['hk'];
+      if (modules.length > 1) {
+        showModulePicker(loc, code, modules);
+      } else {
+        sessionStorage.setItem('activeModule', modules[0]);
+        showComplaintForm(loc, code);
+      }
     } catch(e) {
       showError('Connection Error', 'Could not connect to the server. Please check your internet and try again.');
     }
@@ -131,9 +146,40 @@ body{background:var(--bg);min-height:100dvh}
 
   function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
+  function showModulePicker(loc, code, modules) {
+    var parentInfo = loc.parentName ? esc(loc.parentName) + ' → ' + esc(loc.name) : esc(loc.name);
+    var typeLabel = loc.type.replace(/_/g, ' ');
+    root.innerHTML =
+      '<div class="scan-header">' +
+        '<div class="scan-logo">🏥 Kodspot</div>' +
+        '<div class="scan-loc">' +
+          '<div class="scan-loc-name">' + parentInfo + '</div>' +
+          '<div class="scan-loc-meta">' + typeLabel + '</div>' +
+          '<div class="scan-loc-org">' + esc(loc.orgName) + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div style="text-align:center;margin-bottom:1rem"><p style="font-size:.85rem;font-weight:600;color:var(--text)">What type of issue?</p>' +
+      '<p style="font-size:.78rem;color:var(--text-muted)">Select the service category for your report</p></div>' +
+      '<div class="role-cards" style="grid-template-columns:1fr">' +
+      modules.map(function(m) {
+        var meta = MODULE_META[m] || { label: m, icon: '📋', desc: 'Report an issue' };
+        return '<div class="role-card" onclick="window._pickModule(\'' + m + '\')" style="text-align:left;padding:1rem 1.15rem">' +
+          '<span class="role-icon" style="font-size:1.3rem;display:inline;margin-right:.4rem">' + meta.icon + '</span>' +
+          '<span class="role-label">' + meta.label + '</span>' +
+          '<div class="role-desc" style="margin-top:.15rem">' + meta.desc + '</div>' +
+        '</div>';
+      }).join('') +
+      '</div>';
+
+    window._pickModule = function(mod) {
+      sessionStorage.setItem('activeModule', mod);
+      showComplaintForm(loc, code);
+    };
+  }
+
   function showError(title, sub) {
     root.innerHTML =
-      '<div class="scan-header"><div class="scan-logo">🏥 Housekeeping</div></div>' +
+      '<div class="scan-header"><div class="scan-logo">🏥 Kodspot</div></div>' +
       '<div class="scan-error"><span class="scan-error-icon">⚠️</span>' +
       '<div class="scan-error-text">' + esc(title) + '</div>' +
       '<div class="scan-error-sub">' + esc(sub) + '</div></div>';
@@ -165,7 +211,7 @@ body{background:var(--bg);min-height:100dvh}
       '</div>' +
       '<div class="complaint-form">' +
         '<h3>Report an Issue</h3>' +
-        '<p style="font-size:.8rem;color:var(--text-muted);margin-bottom:1rem">Select the type of issue you want to report. Our housekeeping team will be notified immediately.</p>' +
+        '<p style="font-size:.8rem;color:var(--text-muted);margin-bottom:1rem">Select the type of issue you want to report. Our team will be notified immediately.</p>' +
         '<div class="form-group">' +
           '<div class="form-label">What\'s the problem? <span style="color:var(--danger)">*</span></div>' +
           '<div class="issue-grid" id="issueGrid">' +
@@ -290,7 +336,7 @@ body{background:var(--bg);min-height:100dvh}
       '<div class="scan-success">' +
         '<div class="success-icon"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>' +
         '<div class="success-title">Complaint Submitted!</div>' +
-        '<div class="success-sub">Thank you for reporting. Our housekeeping team has been notified and will address this as soon as possible.</div>' +
+        '<div class="success-sub">Thank you for reporting. Our team has been notified and will address this as soon as possible.</div>' +
         '<div class="success-id">Reference: ' + esc(ticket.id.substring(0, 8).toUpperCase()) + '</div>' +
         '<div style="margin-top:1.5rem"><button class="btn btn-outline" onclick="location.reload()">Report Another Issue</button></div>' +
       '</div>';
