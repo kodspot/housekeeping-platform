@@ -251,6 +251,7 @@
     <form id="orgForm">
       <input type="hidden" id="orgId">
       <div class="form-group"><label class="form-label">Name *</label><input class="form-input" type="text" id="orgName" required maxlength="200"></div>
+      <div class="form-group"><label class="form-label">Slug (URL path) *</label><input class="form-input" type="text" id="orgSlug" required maxlength="50" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="e.g. kle" style="font-family:monospace"><small style="color:#666">Lowercase letters, numbers, hyphens only. Used in URLs like /kle/admin-login</small></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Type</label>
           <select class="form-select" id="orgType"><option value="HOTEL">Hotel</option><option value="HOSPITAL">Hospital</option><option value="OTHER">Other</option></select>
@@ -492,9 +493,17 @@ function openOrgModal() {
   $('orgForm').reset(); $('orgId').value = '';
   $('orgModalTitle').textContent = 'New Organization';
   $('orgStatusGroup').style.display = 'none';
+  $('orgSlug').readOnly = false;
   App.hideError('orgError');
   App.openModal('orgModal');
 }
+
+// Auto-generate slug from name as user types (only for new orgs)
+$('orgName').addEventListener('input', function() {
+  if ($('orgId').value) return; // Don't auto-slug when editing
+  var slug = this.value.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').substring(0, 50);
+  $('orgSlug').value = slug;
+});
 
 async function editOrg(id) {
   var org = allOrgs.find(function(o) { return o.id === id; });
@@ -502,6 +511,7 @@ async function editOrg(id) {
   $('orgModalTitle').textContent = 'Edit Organization';
   $('orgId').value = org.id;
   $('orgName').value = org.name;
+  $('orgSlug').value = org.slug || '';
   $('orgType').value = org.type || 'HOTEL';
   $('orgPhone').value = org.phone || '';
   $('orgEmail').value = org.email || '';
@@ -515,7 +525,7 @@ async function editOrg(id) {
 $('orgForm').addEventListener('submit', async function(e) {
   e.preventDefault();
   var id = $('orgId').value;
-  var body = { name: $('orgName').value.trim(), type: $('orgType').value };
+  var body = { name: $('orgName').value.trim(), slug: $('orgSlug').value.trim().toLowerCase(), type: $('orgType').value };
   var v = $('orgPhone').value.trim(); if (v) body.phone = v; else body.phone = '';
   v = $('orgEmail').value.trim(); if (v) body.email = v; else body.email = '';
   v = $('orgAddress').value.trim(); if (v) body.address = v; else body.address = '';

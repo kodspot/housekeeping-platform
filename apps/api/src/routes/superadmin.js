@@ -30,9 +30,10 @@ async function superadminRoutes(fastify, opts) {
     });
   });
 
-  fastify.post('/superadmin/organizations', async (request) => {
+  fastify.post('/superadmin/organizations', async (request, reply) => {
     const schema = z.object({
       name: z.string().min(1).max(200).trim(),
+      slug: z.string().min(1).max(50).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug must be lowercase letters, numbers, and hyphens only').optional(),
       type: z.string().max(50).optional(),
       address: z.string().max(500).optional(),
       phone: z.string().max(20).optional(),
@@ -41,12 +42,12 @@ async function superadminRoutes(fastify, opts) {
 
     const data = schema.parse(request.body);
 
-    // Auto-generate slug from name
-    let slug = data.name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').substring(0, 50);
+    // Use provided slug or auto-generate from name
+    let slug = data.slug || data.name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').substring(0, 50);
     if (!slug) slug = 'org-' + Date.now().toString(36).slice(-6);
     // Ensure uniqueness
     const existing = await prisma.organization.findUnique({ where: { slug } });
-    if (existing) slug = slug + '-' + Date.now().toString(36).slice(-4);
+    if (existing) return reply.code(409).send({ error: 'Slug "' + slug + '" is already taken. Choose a different one.' });
     data.slug = slug;
 
     const org = await prisma.organization.create({ data });
@@ -70,7 +71,7 @@ async function superadminRoutes(fastify, opts) {
     const { id } = request.params;
     const schema = z.object({
       name: z.string().min(1).max(200).trim().optional(),
-      slug: z.string().min(1).max(50).regex(/^[a-z0-9-]+$/).optional(),
+      slug: z.string().min(1).max(50).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug must be lowercase letters, numbers, and hyphens (no leading/trailing hyphens)').optional(),
       type: z.string().max(50).optional(),
       address: z.string().max(500).optional(),
       phone: z.string().max(20).optional(),
@@ -84,6 +85,12 @@ async function superadminRoutes(fastify, opts) {
     const existing = await prisma.organization.findUnique({ where: { id } });
     if (!existing || existing.status === 'DELETED') {
       return reply.code(404).send({ error: 'Organization not found' });
+    }
+
+    // If slug is being changed, check uniqueness
+    if (data.slug && data.slug !== existing.slug) {
+      const slugTaken = await prisma.organization.findUnique({ where: { slug: data.slug } });
+      if (slugTaken) return reply.code(409).send({ error: 'Slug "' + data.slug + '" is already taken.' });
     }
 
     const updated = await prisma.organization.update({ where: { id }, data });
