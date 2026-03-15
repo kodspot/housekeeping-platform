@@ -3,6 +3,7 @@ const { APP_URL } = require('./src/config/env');
 
 const fastify = require('fastify')({
   trustProxy: true,
+  ignoreTrailingSlash: true,
   genReqId: () => `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
   logger: {
     level: process.env.NODE_ENV === 'production' ? 'warn' : 'info',
