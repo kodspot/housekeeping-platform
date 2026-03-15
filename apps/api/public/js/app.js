@@ -518,7 +518,8 @@ window.App = (function () {
     if (!src) return '';
     var t = getToken() || getSupToken();
     if (!t || !src.startsWith('/images/')) return src;
-    return src + (src.includes('?') ? '&' : '?') + 'token=' + t;
+    // Image proxy lives at /api/images/* but stored URLs omit /api prefix
+    return '/api' + src + (src.includes('?') ? '&' : '?') + 'token=' + t;
   }
 
   // ─── Notification Bell System ───

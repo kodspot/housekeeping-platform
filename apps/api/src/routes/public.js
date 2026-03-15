@@ -62,6 +62,7 @@ async function publicRoutes(fastify, opts) {
     }
   }, async (request, reply) => {
     let data, imageUrl = null;
+    let _pendingImageBuffer = null, _pendingImageMime = null;
 
     if (request.isMultipart()) {
       const fieldValue = (f) => {
@@ -92,7 +93,9 @@ async function publicRoutes(fastify, opts) {
         if (!validateImageBuffer(buffer, file.mimetype)) {
           return reply.code(400).send({ error: 'Invalid image file' });
         }
-        // We'll get orgId from location below to namespace the upload
+        // Store buffer for upload after we get orgId from location
+        _pendingImageBuffer = buffer;
+        _pendingImageMime = file.mimetype;
         imageUrl = '__pending__';
       }
     } else {
@@ -135,11 +138,8 @@ async function publicRoutes(fastify, opts) {
     }
 
     // Handle image upload with proper orgId
-    if (imageUrl === '__pending__' && request.isMultipart()) {
-      const imageFile = request.body.image;
-      const file = Array.isArray(imageFile) ? imageFile[0] : imageFile;
-      const buffer = await file.toBuffer();
-      imageUrl = await uploadToR2(buffer, file.mimetype, location.orgId);
+    if (imageUrl === '__pending__' && _pendingImageBuffer) {
+      imageUrl = await uploadToR2(_pendingImageBuffer, _pendingImageMime, location.orgId);
     }
 
     // Map issue type to a readable title

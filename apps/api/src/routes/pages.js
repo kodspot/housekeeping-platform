@@ -122,14 +122,14 @@ async function pageRoutes(fastify) {
     const scope = `/${orgSlug}/${mod}/`;
 
     const swCode = `// ${meta.name} — Module Service Worker (auto-generated)
-const CACHE_NAME = 'kodspot-${mod}-v2';
+const CACHE_NAME = 'kodspot-${mod}-v4';
 const SCOPE = '${scope}';
 const OFFLINE_URL = '/offline.html';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) =>
-      cache.addAll([OFFLINE_URL, '/css/design-system.css?v=4', '/js/app.js?v=3', '/favicon-32x32.png', '/android-chrome-192x192.png'])
+      cache.addAll([OFFLINE_URL, '/css/design-system.css?v=5', '/js/app.js?v=5', '/favicon-32x32.png', '/android-chrome-192x192.png'])
     )
   );
   self.skipWaiting();

@@ -9,7 +9,7 @@
 <link rel="manifest" href="/site.webmanifest">
 <meta name="theme-color" content="#1a7f64">
 <title>My Tickets — Kodspot</title>
-<link rel="stylesheet" href="/css/design-system.css?v=4">
+<link rel="stylesheet" href="/css/design-system.css?v=5">
 <style>
 .sv-shell{max-width:640px;margin:0 auto;padding:1rem .75rem;min-height:calc(100dvh - 56px)}
 
@@ -144,6 +144,7 @@
     <!-- Quick stats -->
     <div class="sv-stats">
       <div class="sv-stat urgent"><div class="sv-stat-val" id="statUrgent">–</div><div class="sv-stat-lbl">Urgent</div></div>
+      <div class="sv-stat open"><div class="sv-stat-val" id="statUnassigned">–</div><div class="sv-stat-lbl">Pool</div></div>
       <div class="sv-stat open"><div class="sv-stat-val" id="statOpen">–</div><div class="sv-stat-lbl">Open</div></div>
       <div class="sv-stat progress"><div class="sv-stat-val" id="statInProgress">–</div><div class="sv-stat-lbl">Active</div></div>
       <div class="sv-stat done"><div class="sv-stat-val" id="statDone">–</div><div class="sv-stat-lbl">Done</div></div>
@@ -151,7 +152,8 @@
 
     <!-- Tabs -->
     <div class="sv-tabs" id="tabs">
-      <button class="sv-tab active" data-status="OPEN" onclick="switchTab('OPEN')">Open <span class="tab-count" id="countOpen">0</span><span class="tab-dot" id="dotOpen"></span></button>
+      <button class="sv-tab active" data-status="UNASSIGNED" onclick="switchTab('UNASSIGNED')">Pool <span class="tab-count" id="countUnassigned">0</span><span class="tab-dot" id="dotPool"></span></button>
+      <button class="sv-tab" data-status="OPEN" onclick="switchTab('OPEN')">Open <span class="tab-count" id="countOpen">0</span><span class="tab-dot" id="dotOpen"></span></button>
       <button class="sv-tab" data-status="IN_PROGRESS" onclick="switchTab('IN_PROGRESS')">Active <span class="tab-count" id="countProgress">0</span></button>
       <button class="sv-tab" data-status="done" onclick="switchTab('done')">Done <span class="tab-count" id="countDone">0</span></button>
     </div>
@@ -172,13 +174,13 @@
   <img class="lightbox-img" id="lightboxImg" onclick="event.stopPropagation()">
 </div>
 
-<script src="/js/app.js?v=3"></script>
+<script src="/js/app.js?v=5"></script>
 <script>
 if (!App.initSupervisor()) throw '';
 App.initNotifications(App.supFetch, 'supervisor');
 var esc = App.esc, $ = App.$;
 var allTickets = [];
-var activeTab = 'OPEN';
+var activeTab = 'UNASSIGNED';
 
 async function loadTickets() {
   App.showSkeletonCards('ticketList', 3);
@@ -186,27 +188,39 @@ async function loadTickets() {
   if (!res) return;
   var data = await res.json();
   allTickets = data.tickets || [];
-  updateCounts();
+  updateCounts(data.unassignedCount || 0);
   renderList();
 }
 
-function updateCounts() {
-  var open = 0, progress = 0, done = 0, urgent = 0;
+function updateCounts(unassignedCount) {
+  var open = 0, progress = 0, done = 0, urgent = 0, unassigned = 0;
   for (var i = 0; i < allTickets.length; i++) {
     var t = allTickets[i];
-    if (t.status === 'OPEN') { open++; if (t.priority === 'URGENT' || t.priority === 'HIGH') urgent++; }
-    else if (t.status === 'IN_PROGRESS') progress++;
-    else done++;
+    if (!t.assignedToId && t.status === 'OPEN') {
+      unassigned++;
+      if (t.priority === 'URGENT' || t.priority === 'HIGH') urgent++;
+    } else if (t.status === 'OPEN') {
+      open++;
+      if (t.priority === 'URGENT' || t.priority === 'HIGH') urgent++;
+    } else if (t.status === 'IN_PROGRESS') {
+      progress++;
+    } else {
+      done++;
+    }
   }
+  $('countUnassigned').textContent = unassigned;
   $('countOpen').textContent = open;
   $('countProgress').textContent = progress;
   $('countDone').textContent = done;
   $('statUrgent').textContent = urgent;
+  $('statUnassigned').textContent = unassigned;
   $('statOpen').textContent = open;
   $('statInProgress').textContent = progress;
   $('statDone').textContent = done;
+  var dotPool = $('dotPool');
+  if (dotPool) dotPool.style.display = unassigned > 0 ? 'block' : 'none';
   var dotEl = $('dotOpen');
-  if (dotEl) dotEl.style.display = urgent > 0 ? 'block' : 'none';
+  if (dotEl) dotEl.style.display = (open > 0 && urgent > 0) ? 'block' : 'none';
 }
 
 function switchTab(tab) {
@@ -220,6 +234,8 @@ function switchTab(tab) {
 
 function renderList() {
   var filtered = allTickets.filter(function(t) {
+    if (activeTab === 'UNASSIGNED') return !t.assignedToId && t.status === 'OPEN';
+    if (activeTab === 'OPEN') return t.assignedToId && t.status === 'OPEN';
     if (activeTab === 'done') return t.status === 'RESOLVED' || t.status === 'CLOSED';
     return t.status === activeTab;
   });
@@ -232,8 +248,9 @@ function renderList() {
   });
 
   if (!filtered.length) {
-    var msgs = { OPEN: 'No open tickets assigned to you', IN_PROGRESS: 'No tickets in progress', done: 'No resolved tickets yet' };
+    var msgs = { UNASSIGNED: 'No unassigned tickets available', OPEN: 'No open tickets assigned to you', IN_PROGRESS: 'No tickets in progress', done: 'No resolved tickets yet' };
     var icons = {
+      UNASSIGNED: '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>',
       OPEN: '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.5"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>',
       IN_PROGRESS: '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
       done: '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="1.5" style="opacity:.5"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>'
@@ -324,13 +341,19 @@ async function showDetail(id) {
     html += '<div style="padding:0 1.15rem"><div class="tk-resolution">';
     html += '<h4><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="vertical-align:-2px"><polyline points="20 6 9 17 4 12"/></svg> Resolution</h4>';
     if (t.resolvedNote) html += '<p>' + esc(t.resolvedNote) + '</p>';
+    if (t.resolvedWorkers && t.resolvedWorkers.length) {
+      html += '<p style="font-size:.75rem;margin-top:.25rem"><b>Workers:</b> ' + t.resolvedWorkers.map(function(w) { return esc(w.name); }).join(', ') + '</p>';
+    }
     if (t.resolvedImageUrl) html += '<img src="' + esc(App.imgUrl(t.resolvedImageUrl)) + '" onclick="openLightbox(this.src)" loading="lazy" alt="Resolution proof">';
     if (t.resolvedAt) html += '<p style="font-size:.7rem;margin-top:.3rem;opacity:.7">Resolved ' + App.fmtDate(t.resolvedAt) + '</p>';
     html += '</div></div>';
   }
 
   html += '<div class="tk-actions" id="ticketActions">';
-  if (t.status === 'OPEN') {
+  if (t.status === 'OPEN' && !t.assignedToId) {
+    // Unassigned ticket — show Pick Up button
+    html += '<button class="btn btn-primary btn-block" onclick="pickupTicket(\'' + t.id + '\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg> Pick Up This Ticket</button>';
+  } else if (t.status === 'OPEN') {
     html += '<button class="btn btn-primary btn-block" onclick="acceptTicket(\'' + t.id + '\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="vertical-align:-2px"><polyline points="20 6 9 17 4 12"/></svg> Accept &amp; Start Work</button>';
   } else if (t.status === 'IN_PROGRESS') {
     html += '<div style="width:100%"><div class="tk-resolve">';
@@ -341,6 +364,8 @@ async function showDetail(id) {
     html += '<input type="file" id="resolvePhoto" accept="image/jpeg,image/png,image/webp" capture="environment" style="display:none" onchange="previewResolvePhoto()">';
     html += '<img class="resolve-preview" id="resolvePreview">';
     html += '</div>';
+    html += '<div style="margin-bottom:.5rem"><label style="font-size:.78rem;font-weight:600;color:var(--text);display:block;margin-bottom:.3rem">Workers who resolved <span style="font-size:.65rem;color:var(--text-muted);font-weight:400">(optional)</span></label>';
+    html += '<div id="resolveWorkerList" style="max-height:140px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);padding:.35rem .5rem;background:var(--surface)"><span style="font-size:.78rem;color:var(--text-muted)">Loading workers…</span></div></div>';
     html += '<div class="form-group" style="margin-bottom:.5rem"><textarea class="form-textarea" id="resolveNote" placeholder="Resolution notes (optional)…" rows="2" maxlength="500" style="font-size:.82rem"></textarea></div>';
     html += '<button class="btn btn-success btn-block" id="resolveBtn" onclick="resolveTicket(\'' + t.id + '\')" disabled>Upload proof photo first</button>';
     html += '</div></div>';
@@ -350,6 +375,9 @@ async function showDetail(id) {
   html += '</div>';
 
   $('detailCard').innerHTML = html;
+
+  // Load workers for resolve form
+  if (t.status === 'IN_PROGRESS') loadResolveWorkers();
 }
 
 function showList() {
@@ -396,6 +424,34 @@ async function acceptTicket(id) {
   showDetail(id);
 }
 
+async function pickupTicket(id) {
+  var btns = $('ticketActions').querySelectorAll('button');
+  btns.forEach(function(b) { b.disabled = true; });
+  var res = await App.supFetch('/tickets/' + id + '/pickup', { method: 'POST' });
+  if (!res) { btns.forEach(function(b) { b.disabled = false; }); return; }
+  if (!res.ok) {
+    var d = await res.json();
+    App.toast(d.error || 'Failed to pick up', 'error');
+    btns.forEach(function(b) { b.disabled = false; });
+    return;
+  }
+  App.toast('Ticket picked up — assigned to you!', 'success');
+  showDetail(id);
+}
+
+async function loadResolveWorkers() {
+  var el = $('resolveWorkerList');
+  if (!el) return;
+  var res = await App.supFetch('/workers?limit=100&active=true');
+  if (!res) { el.innerHTML = '<span style="font-size:.78rem;color:var(--text-muted)">Failed to load</span>'; return; }
+  var data = await res.json();
+  var workers = (data.workers || []).filter(function(w) { return w.isActive !== false; });
+  if (!workers.length) { el.innerHTML = '<span style="font-size:.78rem;color:var(--text-muted)">No workers</span>'; return; }
+  el.innerHTML = workers.map(function(w) {
+    return '<label style="display:flex;align-items:center;gap:.4rem;padding:.2rem 0;font-size:.8rem;cursor:pointer"><input type="checkbox" name="resolveWorkers" value="' + w.id + '"><span>' + esc(w.name) + '</span>' + (w.employeeId ? '<span style="font-size:.65rem;color:var(--text-muted)">' + esc(w.employeeId) + '</span>' : '') + '</label>';
+  }).join('');
+}
+
 async function resolveTicket(id) {
   var photoInput = $('resolvePhoto');
   if (!photoInput.files || !photoInput.files[0]) {
@@ -410,6 +466,12 @@ async function resolveTicket(id) {
   fd.append('image', photoInput.files[0]);
   var note = $('resolveNote').value.trim();
   if (note) fd.append('note', note);
+
+  // Collect selected workers
+  var workerIds = [];
+  var checks = document.querySelectorAll('input[name=resolveWorkers]:checked');
+  for (var i = 0; i < checks.length; i++) workerIds.push(checks[i].value);
+  if (workerIds.length > 0) fd.append('workerIds', JSON.stringify(workerIds));
 
   var res = await App.supFetch('/tickets/' + id + '/resolve', { method: 'POST', body: fd });
   if (!res) { btn.disabled = false; btn.innerHTML = _resolveLabel; return; }

@@ -30,6 +30,7 @@ model Organization {
   tickets           Ticket[]
   auditLogs         AuditLog[]
   notifications     Notification[]
+  shiftConfigs      ShiftConfig[]
 
   deletedAt  DateTime?
   purgeAfter DateTime?
@@ -99,6 +100,7 @@ model Worker {
   isActive   Boolean  @default(true)
 
   cleaningRecords CleaningRecord[]
+  ticketsResolved Ticket[]         @relation("TicketResolvedWorkers")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -225,6 +227,7 @@ model Ticket {
 
   resolvedImageUrl String?
   resolvedNote     String?
+  resolvedWorkers  Worker[] @relation("TicketResolvedWorkers")
   resolvedAt       DateTime?
 
   createdAt DateTime @default(now())
@@ -275,6 +278,25 @@ model Notification {
 
   @@index([userId, isRead])
   @@index([orgId, createdAt])
+}
+
+model ShiftConfig {
+  id    String       @id @default(uuid())
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  shift     Shift
+  startHour Int    // 0-23
+  startMin  Int    @default(0) // 0-59
+  endHour   Int    // 0-23
+  endMin    Int    @default(0) // 0-59
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([orgId, shift])
+  @@index([orgId])
 }
 
 enum UserRole {

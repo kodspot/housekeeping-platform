@@ -9,7 +9,7 @@
 <link rel="manifest" href="/site.webmanifest">
 <meta name="theme-color" content="#1a7f64">
 <title>Dashboard — Kodspot</title>
-<link rel="stylesheet" href="/css/design-system.css?v=4">
+<link rel="stylesheet" href="/css/design-system.css?v=5">
 <style>
 /* ── Dashboard KPI Cards ── */
 .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.75rem;margin-bottom:1.25rem}
@@ -219,21 +219,24 @@
 
   <!-- Shift Progress -->
   <div class="dash-section" style="margin-bottom:1rem" id="shiftProgressSection">
-    <div class="dash-section-title">Today's Shift Progress</div>
+    <div class="dash-section-title" style="justify-content:space-between">
+      <span>Today's Shift Progress</span>
+      <button class="btn btn-sm btn-outline" style="font-size:.68rem;padding:.2rem .5rem" onclick="openShiftConfig()">⚙ Configure Shifts</button>
+    </div>
     <div id="shiftProgress"></div>
   </div>
 
-  <!-- Row 1: Room Status + Trend -->
-  <div class="dash-grid dash-grid-2" style="margin-bottom:1rem">
-    <div class="dash-section">
-      <div class="dash-section-title">Room Status <span class="badge badge-info" id="roomBadge"></span></div>
-      <div id="statusSummary" class="status-summary"></div>
-      <div id="roomGrid" class="room-status-grid"></div>
-    </div>
-    <div class="dash-section">
-      <div class="dash-section-title">Cleaning Activity (7 Days)</div>
-      <div id="trendChart"></div>
-    </div>
+  <!-- Room Status (full width) -->
+  <div class="dash-section" style="margin-bottom:1rem">
+    <div class="dash-section-title">Room Status <span class="badge badge-info" id="roomBadge"></span></div>
+    <div id="statusSummary" class="status-summary"></div>
+    <div id="roomGrid" class="room-status-grid"></div>
+  </div>
+
+  <!-- Cleaning Activity Trend -->
+  <div class="dash-section" style="margin-bottom:1rem">
+    <div class="dash-section-title">Cleaning Activity (7 Days)</div>
+    <div id="trendChart"></div>
   </div>
 
   <!-- Row 2: Overdue + Open Tickets -->
@@ -285,6 +288,19 @@
   </div>
 </div>
 
+<!-- Shift Config Modal -->
+<div class="modal-overlay" id="shiftConfigModal">
+  <div class="modal" style="max-width:480px">
+    <h2 class="modal-title">⏱ Shift Timings</h2>
+    <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:.75rem">Configure shift start and end times for your organization.</p>
+    <div id="shiftConfigBody" style="display:flex;flex-direction:column;gap:.65rem"></div>
+    <div class="modal-actions" style="margin-top:.75rem">
+      <button type="button" class="btn btn-outline" onclick="App.closeModal('shiftConfigModal')">Cancel</button>
+      <button type="button" class="btn btn-primary" id="saveShiftBtn" onclick="saveShiftConfig()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
 <!-- Lightbox -->
 <div class="lightbox-overlay" id="lightbox">
   <button class="lightbox-close" onclick="closeLightbox()">×</button>
@@ -294,7 +310,7 @@
   <div class="lightbox-info" id="lbInfo"></div>
 </div>
 
-<script src="/js/app.js?v=3"></script>
+<script src="/js/app.js?v=5"></script>
 <script>
 if (!App.initAdmin('dashboard')) throw '';
 App.initNotifications(App.apiFetch);
@@ -372,10 +388,12 @@ async function loadKPIs() {
     kpi('kpi-records', 'Total Records', d.totalRecords, d.weeklyAvg > 0 ? 'Avg <b>' + d.weeklyAvg + '</b>/day this week' : 'Lifetime');
 
   // Render shift progress
-  renderShiftProgress(d.shiftProgress);
+  renderShiftProgress(d.shiftProgress, d.shiftConfig);
 }
 
-function renderShiftProgress(sp) {
+function fmtTime(h, m) { var ap = h >= 12 ? 'PM' : 'AM'; var hh = h % 12 || 12; return hh + (m > 0 ? ':' + pad2(m) : '') + ap; }
+
+function renderShiftProgress(sp, sc) {
   if (!sp) { $('shiftProgressSection').style.display = 'none'; return; }
   var shifts = ['MORNING', 'AFTERNOON', 'NIGHT', 'GENERAL'];
   var colors = {MORNING:'sp-morning', AFTERNOON:'sp-afternoon', NIGHT:'sp-night', GENERAL:'sp-general'};
@@ -388,8 +406,12 @@ function renderShiftProgress(sp) {
     var data = sp[s];
     if (!data || data.required === 0) continue;
     var pct = Math.round(data.done / data.required * 100);
+    var timeLabel = '';
+    if (sc && sc[s] && s !== 'GENERAL') {
+      timeLabel = ' <span style="font-size:.62rem;color:var(--text-muted);font-weight:400">' + fmtTime(sc[s].startHour, sc[s].startMin) + '–' + fmtTime(sc[s].endHour, sc[s].endMin) + '</span>';
+    }
     html += '<div class="sp-item">' +
-      '<div class="sp-label"><b>' + icons[s] + ' ' + s.charAt(0) + s.slice(1).toLowerCase() + '</b><span>' + data.done + ' / ' + data.required + ' rooms</span></div>' +
+      '<div class="sp-label"><b>' + icons[s] + ' ' + s.charAt(0) + s.slice(1).toLowerCase() + timeLabel + '</b><span>' + data.done + ' / ' + data.required + ' rooms</span></div>' +
       '<div class="sp-bar"><div class="sp-fill ' + colors[s] + '" style="width:' + Math.max(pct, pct > 0 ? 8 : 0) + '%"><span class="sp-fill-label">' + pct + '%</span></div></div></div>';
   }
   html += '</div>';
@@ -755,6 +777,68 @@ async function fetchAdminQR(mod, role) {
   } catch(e) {
     el.textContent = 'Error';
   }
+}
+
+// ── Shift Config ──
+var _shiftIcons = {MORNING:'🌅', AFTERNOON:'☀️', NIGHT:'🌙', GENERAL:'🏠'};
+var _shiftLabels = {MORNING:'Morning', AFTERNOON:'Afternoon', NIGHT:'Night', GENERAL:'General'};
+
+async function openShiftConfig() {
+  $('shiftConfigBody').innerHTML = '<div style="text-align:center;padding:1rem;color:var(--text-muted);font-size:.82rem">Loading shift config…</div>';
+  App.openModal('shiftConfigModal');
+  var res = await App.apiFetch('/shift-config');
+  if (!res || !res.ok) { $('shiftConfigBody').innerHTML = '<div style="text-align:center;color:var(--danger-text);font-size:.82rem">Failed to load shift config</div>'; return; }
+  var configs = await res.json();
+  var html = '';
+  for (var i = 0; i < configs.length; i++) {
+    var c = configs[i];
+    if (c.shift === 'GENERAL') continue; // General doesn't have time windows
+    html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:.65rem .75rem">';
+    html += '<div style="font-size:.82rem;font-weight:600;margin-bottom:.4rem">' + (_shiftIcons[c.shift] || '') + ' ' + (_shiftLabels[c.shift] || c.shift) + (c.isDefault ? ' <span style="font-size:.62rem;color:var(--text-muted);font-weight:400">(default)</span>' : '') + '</div>';
+    html += '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">';
+    html += '<label style="font-size:.72rem;color:var(--text-muted)">Start</label>';
+    html += '<input type="time" class="form-input" style="font-size:.8rem;padding:.3rem .4rem;width:auto" id="sc-' + c.shift + '-start" value="' + pad2(c.startHour) + ':' + pad2(c.startMin) + '">';
+    html += '<label style="font-size:.72rem;color:var(--text-muted)">End</label>';
+    html += '<input type="time" class="form-input" style="font-size:.8rem;padding:.3rem .4rem;width:auto" id="sc-' + c.shift + '-end" value="' + pad2(c.endHour) + ':' + pad2(c.endMin) + '">';
+    html += '</div></div>';
+  }
+  $('shiftConfigBody').innerHTML = html;
+}
+
+function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+
+async function saveShiftConfig() {
+  var shifts = ['MORNING', 'AFTERNOON', 'NIGHT'];
+  var configs = [];
+  for (var i = 0; i < shifts.length; i++) {
+    var s = shifts[i];
+    var startEl = $('sc-' + s + '-start');
+    var endEl = $('sc-' + s + '-end');
+    if (!startEl || !endEl) continue;
+    var startParts = startEl.value.split(':');
+    var endParts = endEl.value.split(':');
+    configs.push({
+      shift: s,
+      startHour: parseInt(startParts[0]),
+      startMin: parseInt(startParts[1] || 0),
+      endHour: parseInt(endParts[0]),
+      endMin: parseInt(endParts[1] || 0)
+    });
+  }
+  var btn = $('saveShiftBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  var res = await App.apiFetch('/shift-config', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(configs) });
+  btn.disabled = false;
+  btn.textContent = 'Save Changes';
+  if (!res || !res.ok) {
+    var d = res ? await res.json().catch(function() { return {}; }) : {};
+    App.toast(d.error || 'Failed to save shift config', 'error');
+    return;
+  }
+  App.toast('Shift timings updated!', 'success');
+  App.closeModal('shiftConfigModal');
+  loadDashboard();
 }
 </script>
 </body>

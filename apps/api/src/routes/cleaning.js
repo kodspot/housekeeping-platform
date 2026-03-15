@@ -9,19 +9,51 @@ const { authenticateJWT, requireRole } = require('../middleware/auth');
 async function cleaningRoutes(fastify, opts) {
   fastify.addHook('preHandler', authenticateJWT);
 
-  // Shift time windows (24h format, server time)
-  // MORNING: 06:00 – 14:00, AFTERNOON: 14:00 – 22:00, NIGHT: 22:00 – 06:00
-  function getExpectedShift() {
-    const hour = new Date().getHours();
-    if (hour >= 6 && hour < 14) return 'MORNING';
-    if (hour >= 14 && hour < 22) return 'AFTERNOON';
-    return 'NIGHT';
+  // Default shift windows (used when no org-specific config exists)
+  const DEFAULT_SHIFTS = {
+    MORNING:   { startHour: 6, startMin: 0, endHour: 14, endMin: 0 },
+    AFTERNOON: { startHour: 14, startMin: 0, endHour: 22, endMin: 0 },
+    NIGHT:     { startHour: 22, startMin: 0, endHour: 6, endMin: 0 },
+    GENERAL:   { startHour: 0, startMin: 0, endHour: 0, endMin: 0 }
+  };
+
+  // Cache org shift configs (TTL 5 min)
+  const _shiftCache = {};
+  async function getShiftConfigs(orgId) {
+    const cached = _shiftCache[orgId];
+    if (cached && Date.now() - cached.ts < 300000) return cached.data;
+    const rows = await prisma.shiftConfig.findMany({ where: { orgId } });
+    const configs = { ...DEFAULT_SHIFTS };
+    for (const r of rows) {
+      configs[r.shift] = { startHour: r.startHour, startMin: r.startMin, endHour: r.endHour, endMin: r.endMin };
+    }
+    _shiftCache[orgId] = { data: configs, ts: Date.now() };
+    return configs;
   }
 
-  function isWithinShiftWindow(shift) {
+  function timeInMinutes(h, m) { return h * 60 + m; }
+
+  function getExpectedShiftFromConfig(configs) {
+    const now = new Date();
+    const nowMins = timeInMinutes(now.getHours(), now.getMinutes());
+    for (const shift of ['MORNING', 'AFTERNOON', 'NIGHT']) {
+      const c = configs[shift];
+      const start = timeInMinutes(c.startHour, c.startMin);
+      const end = timeInMinutes(c.endHour, c.endMin);
+      if (end > start) {
+        // Normal range (e.g. 6:00-14:00)
+        if (nowMins >= start && nowMins < end) return shift;
+      } else if (end < start) {
+        // Overnight range (e.g. 22:00-6:00)
+        if (nowMins >= start || nowMins < end) return shift;
+      }
+    }
+    return 'GENERAL';
+  }
+
+  function isWithinShiftWindowConfig(shift, configs) {
     if (shift === 'GENERAL') return true;
-    const expected = getExpectedShift();
-    return shift === expected;
+    return shift === getExpectedShiftFromConfig(configs);
   }
 
   // Submit cleaning record (Supervisor) — multipart form
@@ -106,8 +138,9 @@ async function cleaningRoutes(fastify, opts) {
     }
 
     // Shift validation: detect if submission is outside the shift window
-    const expectedShift = getExpectedShift();
-    const isLate = !isWithinShiftWindow(shift);
+    const shiftConfigs = await getShiftConfigs(orgId);
+    const expectedShift = getExpectedShiftFromConfig(shiftConfigs);
+    const isLate = !isWithinShiftWindowConfig(shift, shiftConfigs);
 
     // If submitting outside the shift window, lateReason is required
     if (isLate && (!lateReason || !lateReason.trim())) {
@@ -264,6 +297,70 @@ async function cleaningRoutes(fastify, opts) {
     });
 
     return updated;
+  });
+
+  // ── Shift Config: Get org shift timings ──
+  fastify.get('/shift-config', {
+    preHandler: [requireRole('ADMIN', 'SUPERVISOR')]
+  }, async (request) => {
+    const orgId = request.user.orgId;
+    const rows = await prisma.shiftConfig.findMany({ where: { orgId } });
+    const savedShifts = new Set(rows.map(r => r.shift));
+    const configs = { ...DEFAULT_SHIFTS };
+    for (const r of rows) {
+      configs[r.shift] = { startHour: r.startHour, startMin: r.startMin, endHour: r.endHour, endMin: r.endMin };
+    }
+    return ['MORNING', 'AFTERNOON', 'NIGHT', 'GENERAL'].map(shift => ({
+      shift,
+      startHour: configs[shift].startHour,
+      startMin: configs[shift].startMin,
+      endHour: configs[shift].endHour,
+      endMin: configs[shift].endMin,
+      isDefault: !savedShifts.has(shift)
+    }));
+  });
+
+  // ── Shift Config: Update org shift timings (Admin only) ──
+  fastify.put('/shift-config', {
+    preHandler: [requireRole('ADMIN')]
+  }, async (request, reply) => {
+    const orgId = request.user.orgId;
+    const schema = z.array(z.object({
+      shift: z.enum(['MORNING', 'AFTERNOON', 'NIGHT', 'GENERAL']),
+      startHour: z.number().int().min(0).max(23),
+      startMin: z.number().int().min(0).max(59).default(0),
+      endHour: z.number().int().min(0).max(23),
+      endMin: z.number().int().min(0).max(59).default(0)
+    }));
+
+    const configs = schema.parse(request.body);
+
+    // Upsert each shift config
+    const results = [];
+    for (const c of configs) {
+      const result = await prisma.shiftConfig.upsert({
+        where: { orgId_shift: { orgId, shift: c.shift } },
+        update: { startHour: c.startHour, startMin: c.startMin, endHour: c.endHour, endMin: c.endMin },
+        create: { orgId, shift: c.shift, startHour: c.startHour, startMin: c.startMin, endHour: c.endHour, endMin: c.endMin }
+      });
+      results.push(result);
+    }
+
+    // Invalidate cache
+    delete _shiftCache[orgId];
+
+    await prisma.auditLog.create({
+      data: {
+        orgId,
+        actorType: 'admin',
+        actorId: request.user.id,
+        action: 'shift_config_updated',
+        entityType: 'ShiftConfig',
+        newValue: configs
+      }
+    });
+
+    return results;
   });
 }
 

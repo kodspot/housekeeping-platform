@@ -30,7 +30,8 @@ async function analyticsRoutes(fastify, opts) {
       totalRecords,
       scheduledCount,
       schedules,
-      todayCleaningShifts
+      todayCleaningShifts,
+      shiftConfigRows
     ] = await Promise.all([
       prisma.location.count({ where: { orgId, isActive: true, type: { notIn: ['BUILDING', 'FLOOR'] } } }),
       prisma.worker.count({ where: { orgId, isActive: true } }),
@@ -50,7 +51,9 @@ async function analyticsRoutes(fastify, opts) {
       prisma.cleaningRecord.findMany({
         where: { orgId, cleanedAt: { gte: todayStart, lte: todayEnd } },
         select: { locationId: true, shift: true }
-      })
+      }),
+      // Org shift config
+      prisma.shiftConfig.findMany({ where: { orgId } })
     ]);
 
     const weeklyAvg = weekRecords > 0 ? Math.round(weekRecords / 7 * 10) / 10 : 0;
@@ -76,6 +79,17 @@ async function analyticsRoutes(fastify, opts) {
     }
     const completionRate = totalRequired > 0 ? Math.round(totalDone / totalRequired * 100) : null;
 
+    // Build shift config with defaults
+    const defaultShifts = {
+      MORNING:   { startHour: 6, startMin: 0, endHour: 14, endMin: 0 },
+      AFTERNOON: { startHour: 14, startMin: 0, endHour: 22, endMin: 0 },
+      NIGHT:     { startHour: 22, startMin: 0, endHour: 6, endMin: 0 },
+      GENERAL:   { startHour: 0, startMin: 0, endHour: 0, endMin: 0 }
+    };
+    for (const r of shiftConfigRows) {
+      defaultShifts[r.shift] = { startHour: r.startHour, startMin: r.startMin, endHour: r.endHour, endMin: r.endMin };
+    }
+
     return {
       totalLocations,
       activeWorkers,
@@ -92,7 +106,8 @@ async function analyticsRoutes(fastify, opts) {
         AFTERNOON: { required: shiftRequired.AFTERNOON, done: shiftDone.AFTERNOON },
         NIGHT: { required: shiftRequired.NIGHT, done: shiftDone.NIGHT },
         GENERAL: { required: shiftRequired.GENERAL, done: shiftDone.GENERAL }
-      }
+      },
+      shiftConfig: defaultShifts
     };
   });
 

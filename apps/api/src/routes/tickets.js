@@ -10,7 +10,8 @@ const { createNotification, notifyAdmins } = require('./notifications');
 const TICKET_INCLUDE = {
   location: { select: { id: true, name: true, type: true } },
   createdBy: { select: { id: true, name: true, role: true } },
-  assignedTo: { select: { id: true, name: true } }
+  assignedTo: { select: { id: true, name: true } },
+  resolvedWorkers: { select: { id: true, name: true } }
 };
 
 async function processImage(request, orgId) {
@@ -92,14 +93,24 @@ async function ticketRoutes(fastify, opts) {
   });
 
   // ── List tickets ──
-  // Supervisors only see tickets assigned to them; Admins see all
+  // Supervisors see tickets assigned to them + unassigned OPEN tickets; Admins see all
   fastify.get('/tickets', async (request) => {
     const orgId = request.user.orgId;
-    const { status, locationId, priority, source, page, limit, search, assignedToId, from, to } = request.query;
+    const { status, locationId, priority, source, page, limit, search, assignedToId, from, to, pool } = request.query;
 
     const where = { orgId };
     if (request.user.role === 'SUPERVISOR') {
-      where.assignedToId = request.user.id;
+      if (pool === 'unassigned') {
+        // Show only unassigned open tickets (pickup pool)
+        where.assignedToId = null;
+        where.status = 'OPEN';
+      } else {
+        // Show assigned-to-me tickets + unassigned open tickets
+        where.OR = [
+          { assignedToId: request.user.id },
+          { assignedToId: null, status: 'OPEN' }
+        ];
+      }
     }
     if (status) {
       const statuses = status.split(',').map(s => s.trim()).filter(Boolean);
@@ -137,7 +148,12 @@ async function ticketRoutes(fastify, opts) {
 
     // Count stats per status (org-wide, ignoring filters)
     const statsWhere = { orgId };
-    if (request.user.role === 'SUPERVISOR') statsWhere.assignedToId = request.user.id;
+    if (request.user.role === 'SUPERVISOR') {
+      statsWhere.OR = [
+        { assignedToId: request.user.id },
+        { assignedToId: null, status: 'OPEN' }
+      ];
+    }
     const statCounts = await prisma.ticket.groupBy({
       by: ['status'],
       where: statsWhere,
@@ -146,7 +162,13 @@ async function ticketRoutes(fastify, opts) {
     const stats = { OPEN: 0, IN_PROGRESS: 0, RESOLVED: 0, CLOSED: 0 };
     for (const s of statCounts) stats[s.status] = s._count;
 
-    return { tickets, total, page: Math.floor(skip / take) + 1, pages: Math.ceil(total / take), stats };
+    // For supervisors, also count unassigned open tickets separately
+    let unassignedCount = 0;
+    if (request.user.role === 'SUPERVISOR') {
+      unassignedCount = await prisma.ticket.count({ where: { orgId, assignedToId: null, status: 'OPEN' } });
+    }
+
+    return { tickets, total, page: Math.floor(skip / take) + 1, pages: Math.ceil(total / take), stats, unassignedCount };
   });
 
   // ── Get single ticket ──
@@ -154,7 +176,11 @@ async function ticketRoutes(fastify, opts) {
     const { id } = request.params;
     const where = { id, orgId: request.user.orgId };
     if (request.user.role === 'SUPERVISOR') {
-      where.assignedToId = request.user.id;
+      // Supervisors can view their assigned tickets + unassigned open tickets
+      where.OR = [
+        { assignedToId: request.user.id },
+        { assignedToId: null, status: 'OPEN' }
+      ];
     }
     const ticket = await prisma.ticket.findFirst({ where, include: TICKET_INCLUDE });
     if (!ticket) return reply.code(404).send({ error: 'Ticket not found' });
@@ -261,6 +287,46 @@ async function ticketRoutes(fastify, opts) {
     return updated;
   });
 
+  // ── Supervisor: Pick up unassigned ticket (self-assign + mark IN_PROGRESS) ──
+  fastify.post('/tickets/:id/pickup', {
+    preHandler: [requireRole('SUPERVISOR')]
+  }, async (request, reply) => {
+    const { id } = request.params;
+    const ticket = await prisma.ticket.findFirst({
+      where: { id, orgId: request.user.orgId, assignedToId: null, status: 'OPEN' }
+    });
+    if (!ticket) return reply.code(404).send({ error: 'Ticket not found or already assigned' });
+
+    const updated = await prisma.ticket.update({
+      where: { id },
+      data: { assignedToId: request.user.id, status: 'IN_PROGRESS' },
+      include: TICKET_INCLUDE
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        orgId: request.user.orgId,
+        actorType: 'supervisor',
+        actorId: request.user.id,
+        action: 'ticket_picked_up',
+        entityType: 'Ticket',
+        entityId: id,
+        oldValue: { status: 'OPEN', assignedToId: null },
+        newValue: { status: 'IN_PROGRESS', assignedToId: request.user.id }
+      }
+    });
+
+    // Notify admins that supervisor picked up a ticket
+    notifyAdmins(request.user.orgId, {
+      type: 'ticket_assigned',
+      title: 'Ticket picked up',
+      body: (request.user.name || 'Supervisor') + ' picked up: ' + updated.title,
+      entityId: id
+    }).catch(() => {});
+
+    return updated;
+  });
+
   // ── Resolve ticket with proof photo (ADMIN or assigned SUPERVISOR) ──
   fastify.post('/tickets/:id/resolve', async (request, reply) => {
     const { id } = request.params;
@@ -280,6 +346,7 @@ async function ticketRoutes(fastify, opts) {
 
     let resolvedImageUrl = null;
     let resolvedNote = null;
+    let workerIdsRaw = null;
 
     if (request.isMultipart()) {
       const fv = (f) => {
@@ -288,11 +355,31 @@ async function ticketRoutes(fastify, opts) {
         return f;
       };
       resolvedNote = fv(request.body.note)?.trim() || null;
+      workerIdsRaw = fv(request.body.workerIds);
       try { resolvedImageUrl = await processImage(request, orgId); } catch (e) {
         return reply.code(400).send({ error: e.message });
       }
     } else if (request.body) {
       resolvedNote = request.body.note?.trim() || null;
+      workerIdsRaw = request.body.workerIds;
+    }
+
+    // Parse worker IDs (optional)
+    let workerIdList = [];
+    if (workerIdsRaw) {
+      try {
+        workerIdList = typeof workerIdsRaw === 'string' ? JSON.parse(workerIdsRaw) : (Array.isArray(workerIdsRaw) ? workerIdsRaw : []);
+      } catch { /* ignore parse error */ }
+    }
+
+    // Validate workers belong to same org if provided
+    if (workerIdList.length > 0) {
+      const workers = await prisma.worker.findMany({
+        where: { id: { in: workerIdList }, orgId, isActive: true }
+      });
+      if (workers.length !== workerIdList.length) {
+        return reply.code(400).send({ error: 'One or more workers not found or inactive' });
+      }
     }
 
     // Require proof photo for resolution
@@ -300,15 +387,23 @@ async function ticketRoutes(fastify, opts) {
       return reply.code(400).send({ error: 'A proof photo is required to resolve tickets' });
     }
 
+    const updateData = {
+      status: 'RESOLVED',
+      resolvedAt: new Date(),
+      resolvedImageUrl,
+      resolvedNote
+    };
+    if (workerIdList.length > 0) {
+      updateData.resolvedWorkers = { connect: workerIdList.map(id => ({ id })) };
+    }
+
     const updated = await prisma.ticket.update({
       where: { id },
-      data: {
-        status: 'RESOLVED',
-        resolvedAt: new Date(),
-        resolvedImageUrl,
-        resolvedNote
-      },
-      include: TICKET_INCLUDE
+      data: updateData,
+      include: {
+        ...TICKET_INCLUDE,
+        resolvedWorkers: { select: { id: true, name: true } }
+      }
     });
 
     await prisma.auditLog.create({
