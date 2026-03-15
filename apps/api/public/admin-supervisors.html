@@ -9,7 +9,7 @@
 <link rel="manifest" href="/site.webmanifest">
 <meta name="theme-color" content="#1a7f64">
 <title>Supervisors — Kodspot</title>
-<link rel="stylesheet" href="/css/design-system.css?v=2">
+<link rel="stylesheet" href="/css/design-system.css?v=3">
 <style>
 /* ── Summary ── */
 .sv-summary{display:flex;gap:1rem;flex-wrap:wrap;padding:.6rem 0 .5rem;border-bottom:1px solid var(--border-light);margin-bottom:.75rem}
@@ -372,13 +372,13 @@ async function loadSupervisors(page) {
       '<button class="btn btn-sm btn-outline" onclick="viewSupervisor(\'' + s.id + '\')" title="View details">View</button>' +
       '<button class="btn btn-sm btn-outline" onclick="openEdit(\'' + s.id + '\')" title="Edit">Edit</button>' +
       '<button class="btn btn-sm btn-outline" onclick="openPwReset(\'' + s.id + '\')" title="Reset password">PW</button>' +
-      '<button class="btn btn-sm btn-outline" onclick="showStats(\'' + s.id + '\',\'' + esc(s.name) + '\')" title="Analytics">Stats</button>';
+      '<button class="btn btn-sm btn-outline" onclick="showStats(\'' + s.id + '\',\'' + esc(s.name).replace(/'/g, "\\'") + '\')" title="Analytics">Stats</button>';
 
     if (s.isActive !== false) {
-      actions += '<button class="btn btn-sm btn-danger" onclick="deactivateSup(\'' + s.id + '\',\'' + esc(s.name) + '\')" title="Deactivate">Deactivate</button>';
+      actions += '<button class="btn btn-sm btn-danger" onclick="deactivateSup(\'' + s.id + '\',\'' + esc(s.name).replace(/'/g, "\\'") + '\')" title="Deactivate">Deactivate</button>';
     } else {
       actions += '<button class="btn btn-sm btn-success" onclick="reactivateSup(\'' + s.id + '\')" title="Reactivate">Activate</button>' +
-        '<button class="btn btn-sm btn-danger" onclick="permanentDeleteSup(\'' + s.id + '\',\'' + esc(s.name) + '\')" title="Delete permanently">Delete</button>';
+        '<button class="btn btn-sm btn-danger" onclick="permanentDeleteSup(\'' + s.id + '\',\'' + esc(s.name).replace(/'/g, "\\'") + '\')" title="Delete permanently">Delete</button>';
     }
     actions += '</div>';
 

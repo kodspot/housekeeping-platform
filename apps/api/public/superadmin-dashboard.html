@@ -9,7 +9,7 @@
 <link rel="manifest" href="/site.webmanifest">
 <meta name="theme-color" content="#1a7f64">
 <title>Super Admin — Kodspot</title>
-<link rel="stylesheet" href="/css/design-system.css?v=2">
+<link rel="stylesheet" href="/css/design-system.css?v=3">
 <style>
 :root { --sa: #4338CA; --sa-hover: #3730A3; --sa-light: #EEF2FF; --sa-border: #C7D2FE; }
 .topbar-sa { background: var(--sa); }
@@ -93,16 +93,16 @@
 .empty-state-icon { font-size: 2.5rem; margin-bottom: .5rem; opacity: .5; }
 
 /* QR Modal */
-.qr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
-.qr-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem; text-align: center; }
+.qr-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: .75rem; }
+.qr-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: .75rem; text-align: center; }
 .qr-card-title { font-size: .78rem; font-weight: 600; color: var(--text); margin-bottom: .15rem; }
-.qr-card-sub { font-size: .68rem; color: var(--text-muted); margin-bottom: .6rem; }
-.qr-card svg { width: 160px; height: 160px; display: block; margin: 0 auto .5rem; }
+.qr-card-sub { font-size: .68rem; color: var(--text-muted); margin-bottom: .5rem; }
+.qr-card svg { width: 100%; max-width: 160px; height: auto; display: block; margin: 0 auto .5rem; }
 .qr-card-url { font-size: .62rem; color: var(--text-light); word-break: break-all; font-family: monospace; background: var(--surface); padding: .25rem .4rem; border-radius: var(--radius-sm); }
 .qr-mod-section { margin-bottom: 1.25rem; }
 .qr-mod-label { font-size: .85rem; font-weight: 600; color: var(--sa); margin-bottom: .6rem; display: flex; align-items: center; gap: .4rem; }
 .qr-print-bar { display: flex; justify-content: flex-end; gap: .5rem; margin-bottom: .75rem; }
-@media (max-width: 480px) { .qr-grid { grid-template-columns: 1fr 1fr; gap: .6rem; } .qr-card svg { width: 120px; height: 120px; } }
+@media (max-width: 480px) { .qr-card { padding: .5rem; } .qr-card-title { font-size: .72rem; } .qr-card-sub { font-size: .62rem; margin-bottom: .35rem; } }
 @media print {
   body > *:not(#loginQrModal) { display: none !important; }
   #loginQrModal { position: static; background: #fff; }
@@ -632,7 +632,7 @@ async function loadUsers(role) {
       '<td class="hide-mobile">' + esc(u.organization ? u.organization.name : '—') + '</td>' +
       '<td><span class="status-badge ' + statusCls + '">' + statusText + '</span></td>' +
       '<td class="actions-cell">' +
-        '<button class="btn btn-sm btn-outline" onclick="openEditUser(\'' + u.id + '\',\'' + esc(u.name).replace(/'/g, "\\'") + '\',\'' + esc(u.email) + '\',\'' + esc(u.phone || '') + '\',\'' + role + '\',\'' + (u.orgId || '') + '\')">Edit</button>' +
+        '<button class="btn btn-sm btn-outline" onclick="openEditUser(\'' + u.id + '\',\'' + esc(u.name).replace(/'/g, "\\'") + '\',\'' + esc(u.email).replace(/'/g, "\\'") + '\',\'' + esc(u.phone || '').replace(/'/g, "\\'") + '\',\'' + role + '\',\'' + (u.orgId || '') + '\')">Edit</button>' +
         '<button class="btn btn-sm btn-outline" onclick="openPwReset(\'' + u.id + '\',\'' + esc(u.name).replace(/'/g, "\\'") + '\')">Reset PW</button>' +
         (u.isActive !== false ?
           '<button class="btn btn-sm btn-danger" onclick="toggleUserActive(\'' + u.id + '\',false,\'' + role + '\')">Deactivate</button>' :
@@ -751,7 +751,7 @@ async function loadWorkers() {
       '<td class="hide-mobile">' + esc(w.department || '—') + '</td>' +
       '<td>' + ((w._count && w._count.cleaningRecords) || 0) + '</td>' +
       '<td class="actions-cell">' +
-        '<button class="btn btn-sm btn-outline" onclick="openWorkerEdit(\'' + w.id + '\',\'' + esc(w.name) + '\',\'' + esc(w.employeeId || '') + '\',\'' + esc(w.phone || '') + '\',\'' + esc(w.email || '') + '\',\'' + esc(w.department || '') + '\',\'' + esc(w.designation || '') + '\')">Edit</button>' +
+        '<button class="btn btn-sm btn-outline" onclick="openWorkerEdit(\'' + w.id + '\',\'' + esc(w.name).replace(/'/g, "\\'") + '\',\'' + esc(w.employeeId || '').replace(/'/g, "\\'") + '\',\'' + esc(w.phone || '').replace(/'/g, "\\'") + '\',\'' + esc(w.email || '').replace(/'/g, "\\'") + '\',\'' + esc(w.department || '').replace(/'/g, "\\'") + '\',\'' + esc(w.designation || '').replace(/'/g, "\\'") + '\')">Edit</button>' +
         (w.isActive !== false ?
           '<button class="btn btn-sm btn-danger" onclick="toggleWorker(\'' + w.id + '\',false)">Deactivate</button>' :
           '<button class="btn btn-sm btn-success" onclick="toggleWorker(\'' + w.id + '\',true)">Activate</button>') +
@@ -985,7 +985,7 @@ function qrCardPlaceholder(orgId, mod, role, slug) {
   return '<div class="qr-card">' +
     '<div class="qr-card-title">' + label + '</div>' +
     '<div class="qr-card-sub">' + mod.toUpperCase() + ' module</div>' +
-    '<div id="qr-' + mod + '-' + role + '" style="width:160px;height:160px;margin:0 auto .5rem;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:.75rem">Loading…</div>' +
+    '<div id="qr-' + mod + '-' + role + '" style="width:100%;max-width:160px;aspect-ratio:1;margin:0 auto .5rem;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:.75rem">Loading…</div>' +
     '<div class="qr-card-url">' + esc(url) + '</div>' +
   '</div>';
 }
@@ -1000,7 +1000,7 @@ async function fetchLoginQR(orgId, mod, role) {
       el.innerHTML = svg;
       el.style = '';
       var svgEl = el.querySelector('svg');
-      if (svgEl) { svgEl.style.width = '160px'; svgEl.style.height = '160px'; }
+      if (svgEl) { svgEl.style.width = '100%'; svgEl.style.maxWidth = '160px'; svgEl.style.height = 'auto'; }
     } else {
       el.textContent = 'Failed';
     }

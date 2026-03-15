@@ -231,7 +231,7 @@ async function supervisorRoutes(fastify, opts) {
     if (!user) return reply.code(404).send({ error: 'Supervisor not found' });
 
     const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
-    await prisma.user.update({ where: { id }, data: { passwordHash } });
+    await prisma.user.update({ where: { id }, data: { passwordHash, tokenInvalidBefore: new Date() } });
 
     await prisma.auditLog.create({
       data: {

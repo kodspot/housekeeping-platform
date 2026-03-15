@@ -295,7 +295,7 @@ async function superadminRoutes(fastify, opts) {
     if (!user) return reply.code(404).send({ error: 'User not found' });
 
     const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
-    await prisma.user.update({ where: { id }, data: { passwordHash } });
+    await prisma.user.update({ where: { id }, data: { passwordHash, tokenInvalidBefore: new Date() } });
 
     await prisma.auditLog.create({
       data: {
@@ -442,7 +442,7 @@ async function superadminRoutes(fastify, opts) {
       }
     });
 
-    return worker;
+    return decryptWorkerPII(worker);
   });
 
   fastify.patch('/superadmin/workers/:id', async (request, reply) => {
@@ -488,7 +488,8 @@ async function superadminRoutes(fastify, opts) {
 
     encryptWorkerPII(data);
 
-    return prisma.worker.update({ where: { id }, data });
+    const updated = await prisma.worker.update({ where: { id }, data });
+    return decryptWorkerPII(updated);
   });
 
   // === System Analytics (cross-org stats for SuperAdmin) ===

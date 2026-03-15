@@ -157,7 +157,7 @@ button { font-family: var(--font); }
 [data-theme="dark"] .topbar { background: var(--surface); border-bottom: 1px solid var(--border); }
 
 /* Supervisor nav */
-.sv-nav { display: flex; gap: 2px; margin-left: .25rem; }
+.sv-nav { display: flex; gap: 2px; margin-left: .25rem; flex-shrink: 1; min-width: 0; }
 .sv-nav-link {
   display: inline-flex; align-items: center; gap: 5px; padding: .35rem .7rem;
   font-size: .82rem; font-weight: 500; color: rgba(255,255,255,.6); text-decoration: none;
@@ -168,7 +168,7 @@ button { font-family: var(--font); }
 .sv-nav-link.active { color: #fff; background: rgba(255,255,255,.12); font-weight: 600; }
 .sv-nav-link.active svg { opacity: 1; }
 
-.topbar-left { display: flex; align-items: center; gap: var(--sp-md); min-width: 0; flex: 1; overflow: hidden; }
+.topbar-left { display: flex; align-items: center; gap: var(--sp-md); min-width: 0; flex: 1; }
 .topbar-brand { font-size: 1.1rem; font-weight: 700; white-space: nowrap; flex-shrink: 0; }
 .topbar-powered { font-weight: 400; font-size: .72rem; opacity: .55; }
 .topbar-nav { display: flex; gap: 2px; flex-shrink: 1; min-width: 0; overflow: hidden; }
@@ -1289,6 +1289,8 @@ tr:hover td { background: rgba(14,165,164,.02); }
   .auth-title { font-size: 1.25rem; }
   .landing-title { font-size: 1.3rem; }
   .qr-grid { grid-template-columns: repeat(2, 1fr); gap: var(--sp-md); }
+  .sv-nav-link { padding: .25rem .35rem; font-size: .7rem; }
+  .topbar-brand { font-size: .9rem; }
   .trend-chart { height: 90px; }
   .pager { gap: .25rem; }
   .pager button { padding: .25rem .5rem; font-size: .75rem; }
@@ -1368,6 +1370,11 @@ tr:hover td { background: rgba(14,165,164,.02); }
   .topbar-right { gap: 6px; }
   .notif-bell { min-width: 36px; min-height: 36px; padding: 4px; }
   .notif-panel { width: 320px; }
+
+  /* Supervisor nav compact */
+  .sv-nav { gap: 1px; margin-left: .15rem; }
+  .sv-nav-link { padding: .3rem .45rem; font-size: .75rem; gap: 3px; }
+  .sv-nav-link svg { width: 14px; height: 14px; }
 
   /* Compact user menu: hide name, show avatar only */
   .user-menu-name { display: none; }

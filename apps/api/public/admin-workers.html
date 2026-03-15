@@ -9,7 +9,7 @@
 <link rel="manifest" href="/site.webmanifest">
 <meta name="theme-color" content="#1a7f64">
 <title>Workers — Kodspot</title>
-<link rel="stylesheet" href="/css/design-system.css?v=2">
+<link rel="stylesheet" href="/css/design-system.css?v=3">
 <style>
 /* ── Summary bar ── */
 .wk-summary{display:flex;gap:1rem;flex-wrap:wrap;padding:.6rem 0 .5rem;border-bottom:1px solid var(--border-light);margin-bottom:.75rem}
@@ -44,6 +44,11 @@
 .wk-stat-card:hover{box-shadow:var(--shadow-sm)}
 .wk-stat-val{font-size:1.4rem;font-weight:700;color:var(--primary)}
 .wk-stat-label{font-size:.68rem;color:var(--text-muted);margin-top:2px}
+.wk-stat-section{margin-top:.75rem;padding-top:.6rem;border-top:1px solid var(--border-light)}
+.wk-stat-section-title{font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);margin-bottom:.4rem}
+.wk-stat-row{display:flex;justify-content:space-between;align-items:center;padding:.2rem 0;font-size:.82rem}
+.wk-stat-row-val{font-weight:600}
+.wk-stat-footer{margin-top:.75rem;font-size:.75rem;color:var(--text-muted);text-align:center}
 
 /* ── Detail modal ── */
 .wk-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem .75rem}
@@ -344,13 +349,13 @@ async function loadWorkers(page) {
     var actions = '<div class="wk-actions">' +
       '<button class="btn btn-sm btn-outline" onclick="viewWorker(\'' + w.id + '\')" title="View details">View</button>' +
       '<button class="btn btn-sm btn-outline" onclick="openEdit(\'' + w.id + '\')" title="Edit worker">Edit</button>' +
-      '<button class="btn btn-sm btn-outline" onclick="showStats(\'' + w.id + '\',\'' + esc(w.name) + '\')" title="Cleaning stats">Stats</button>';
+      '<button class="btn btn-sm btn-outline" onclick="showStats(\'' + w.id + '\',\'' + esc(w.name).replace(/'/g, "\\'") + '\')" title="Cleaning stats">Stats</button>';
 
     if (w.isActive !== false) {
-      actions += '<button class="btn btn-sm btn-danger" onclick="deactivateWorker(\'' + w.id + '\',\'' + esc(w.name) + '\')" title="Deactivate worker">Deactivate</button>';
+      actions += '<button class="btn btn-sm btn-danger" onclick="deactivateWorker(\'' + w.id + '\',\'' + esc(w.name).replace(/'/g, "\\'") + '\')" title="Deactivate worker">Deactivate</button>';
     } else {
       actions += '<button class="btn btn-sm btn-success" onclick="reactivateWorker(\'' + w.id + '\')" title="Reactivate worker">Activate</button>' +
-        '<button class="btn btn-sm btn-danger" onclick="permanentDelete(\'' + w.id + '\',\'' + esc(w.name) + '\')" title="Permanently delete">Delete</button>';
+        '<button class="btn btn-sm btn-danger" onclick="permanentDelete(\'' + w.id + '\',\'' + esc(w.name).replace(/'/g, "\\'") + '\')" title="Permanently delete">Delete</button>';
     }
     actions += '</div>';
 
@@ -548,20 +553,47 @@ async function permanentDelete(id, name) {
 
 /* ── Stats ── */
 async function showStats(id, name) {
-  $('statsTitle').textContent = name + ' — Cleaning Stats';
+  $('statsTitle').textContent = name + ' — Analytics';
   $('statsContent').innerHTML = '<div class="loading-center">Loading…</div>';
   App.openModal('statsModal');
   var res = await App.apiFetch('/workers/' + id + '/stats');
   if (!res || !res.ok) { $('statsContent').innerHTML = '<div class="error-msg show" style="display:block">Failed to load stats</div>'; return; }
   var s = await res.json();
-  $('statsContent').innerHTML =
-    '<div class="wk-stats-grid">' +
-      '<div class="wk-stat-card"><div class="wk-stat-val">' + s.daily + '</div><div class="wk-stat-label">Today</div></div>' +
-      '<div class="wk-stat-card"><div class="wk-stat-val">' + s.weekly + '</div><div class="wk-stat-label">This Week</div></div>' +
-      '<div class="wk-stat-card"><div class="wk-stat-val">' + s.monthly + '</div><div class="wk-stat-label">This Month</div></div>' +
-      '<div class="wk-stat-card"><div class="wk-stat-val">' + s.yearly + '</div><div class="wk-stat-label">This Year</div></div>' +
-      '<div class="wk-stat-card"><div class="wk-stat-val">' + s.total + '</div><div class="wk-stat-label">All Time</div></div>' +
-    '</div>';
+  var lastAct = s.lastActivity ? App.fmtDate(s.lastActivity) : 'No activity yet';
+
+  var html = '<div class="wk-stats-grid">' +
+    '<div class="wk-stat-card"><div class="wk-stat-val">' + s.daily + '</div><div class="wk-stat-label">Today</div></div>' +
+    '<div class="wk-stat-card"><div class="wk-stat-val">' + s.weekly + '</div><div class="wk-stat-label">This Week</div></div>' +
+    '<div class="wk-stat-card"><div class="wk-stat-val">' + s.monthly + '</div><div class="wk-stat-label">This Month</div></div>' +
+    '<div class="wk-stat-card"><div class="wk-stat-val">' + s.yearly + '</div><div class="wk-stat-label">This Year</div></div>' +
+    '<div class="wk-stat-card"><div class="wk-stat-val">' + s.total + '</div><div class="wk-stat-label">All Time</div></div>' +
+  '</div>';
+
+  if (s.flagged > 0 || s.lateCount > 0) {
+    html += '<div class="wk-stats-grid" style="margin-top:.35rem">';
+    if (s.flagged > 0) html += '<div class="wk-stat-card"><div class="wk-stat-val" style="color:var(--danger)">' + s.flagged + '</div><div class="wk-stat-label">Flagged</div></div>';
+    if (s.lateCount > 0) html += '<div class="wk-stat-card"><div class="wk-stat-val" style="color:var(--warning)">' + s.lateCount + '</div><div class="wk-stat-label">Late</div></div>';
+    html += '</div>';
+  }
+
+  if (s.shifts && Object.keys(s.shifts).length > 0) {
+    html += '<div class="wk-stat-section"><div class="wk-stat-section-title">Shift Breakdown</div>';
+    ['MORNING','AFTERNOON','NIGHT','GENERAL'].forEach(function(sh) {
+      if (s.shifts[sh]) html += '<div class="wk-stat-row"><span>' + sh.charAt(0) + sh.slice(1).toLowerCase() + '</span><span class="wk-stat-row-val">' + s.shifts[sh] + '</span></div>';
+    });
+    html += '</div>';
+  }
+
+  if (s.topLocations && s.topLocations.length > 0) {
+    html += '<div class="wk-stat-section"><div class="wk-stat-section-title">Top Locations</div>';
+    s.topLocations.forEach(function(loc) {
+      html += '<div class="wk-stat-row"><span>' + esc(loc.name) + '</span><span class="wk-stat-row-val">' + loc.count + '</span></div>';
+    });
+    html += '</div>';
+  }
+
+  html += '<div class="wk-stat-footer">Last activity: ' + lastAct + '</div>';
+  $('statsContent').innerHTML = html;
 }
 
 loadWorkers(1);

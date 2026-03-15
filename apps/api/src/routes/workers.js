@@ -33,7 +33,7 @@ async function workerRoutes(fastify, opts) {
       'newest': { createdAt: 'desc' },
       'oldest': { createdAt: 'asc' },
       'dept': { department: 'asc' },
-      'cleanings': undefined // handled after fetch
+      'cleanings': { cleaningRecords: { _count: 'desc' } }
     };
     const orderBy = sortMap[sort] || { name: 'asc' };
 
@@ -49,14 +49,9 @@ async function workerRoutes(fastify, opts) {
     };
 
     const [workers, total] = await Promise.all([
-      prisma.worker.findMany({ where, orderBy: orderBy || { name: 'asc' }, select, skip, take }),
+      prisma.worker.findMany({ where, orderBy, select, skip, take }),
       prisma.worker.count({ where })
     ]);
-
-    // Sort by cleanings client-side if requested
-    if (sort === 'cleanings') {
-      workers.sort((a, b) => (b._count.cleaningRecords) - (a._count.cleaningRecords));
-    }
 
     // Get distinct departments for filter dropdown
     const departments = await prisma.worker.findMany({
@@ -152,7 +147,7 @@ async function workerRoutes(fastify, opts) {
       }
     });
 
-    return worker;
+    return decryptWorkerPII(worker);
   });
 
   // Update worker
@@ -225,7 +220,8 @@ async function workerRoutes(fastify, opts) {
     // Encrypt sensitive fields before write
     encryptWorkerPII(data);
 
-    return prisma.worker.update({ where: { id }, data });
+    const updated = await prisma.worker.update({ where: { id }, data });
+    return decryptWorkerPII(updated);
   });
 
   // Deactivate worker (using DELETE for REST convention)
@@ -273,15 +269,43 @@ async function workerRoutes(fastify, opts) {
     const yearAgo = new Date(today); yearAgo.setFullYear(yearAgo.getFullYear() - 1);
 
     const base = { workers: { some: { id } } };
-    const [daily, weekly, monthly, yearly, total] = await Promise.all([
+    const [daily, weekly, monthly, yearly, total, flagged, lateCount, lastRecord, shiftRecords, locationRecords] = await Promise.all([
       prisma.cleaningRecord.count({ where: { ...base, cleanedAt: { gte: today } } }),
       prisma.cleaningRecord.count({ where: { ...base, cleanedAt: { gte: weekAgo } } }),
       prisma.cleaningRecord.count({ where: { ...base, cleanedAt: { gte: monthAgo } } }),
       prisma.cleaningRecord.count({ where: { ...base, cleanedAt: { gte: yearAgo } } }),
-      prisma.cleaningRecord.count({ where: base })
+      prisma.cleaningRecord.count({ where: base }),
+      prisma.cleaningRecord.count({ where: { ...base, status: 'FLAGGED' } }),
+      prisma.cleaningRecord.count({ where: { ...base, isLate: true } }),
+      prisma.cleaningRecord.findFirst({ where: base, orderBy: { cleanedAt: 'desc' }, select: { cleanedAt: true } }),
+      prisma.cleaningRecord.groupBy({ by: ['shift'], where: base, _count: true }),
+      prisma.cleaningRecord.groupBy({ by: ['locationId'], where: base, _count: true, orderBy: { _count: { locationId: 'desc' } }, take: 5 })
     ]);
 
-    return { daily, weekly, monthly, yearly, total };
+    // Resolve location names
+    const locIds = locationRecords.map(r => r.locationId);
+    const locations = locIds.length ? await prisma.location.findMany({
+      where: { id: { in: locIds } },
+      select: { id: true, name: true }
+    }) : [];
+    const locMap = {};
+    for (const l of locations) locMap[l.id] = l.name;
+
+    const shifts = {};
+    for (const r of shiftRecords) shifts[r.shift] = r._count;
+
+    const topLocations = locationRecords.map(r => ({
+      name: locMap[r.locationId] || 'Unknown',
+      count: r._count
+    }));
+
+    return {
+      daily, weekly, monthly, yearly, total,
+      flagged, lateCount,
+      lastActivity: lastRecord ? lastRecord.cleanedAt : null,
+      shifts,
+      topLocations
+    };
   });
 
   // Permanent delete worker (must be deactivated first)

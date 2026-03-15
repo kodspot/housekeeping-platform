@@ -104,7 +104,6 @@ model Worker {
   updatedAt DateTime @updatedAt
 
   @@unique([orgId, employeeId])
-  @@unique([orgId, name])
   @@index([orgId, isActive])
 }
 

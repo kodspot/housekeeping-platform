@@ -117,6 +117,8 @@ async function pageRoutes(fastify) {
   fastify.get('/:orgSlug/:mod/sw.js', async (request, reply) => {
     const { orgSlug, mod } = request.params;
     if (!VALID_MODULES.includes(mod)) return reply.callNotFound();
+    const org = await validateOrg(orgSlug);
+    if (!org) return reply.callNotFound();
     const meta = MODULE_META[mod] || MODULE_META.hk;
     const scope = `/${orgSlug}/${mod}/`;
 
