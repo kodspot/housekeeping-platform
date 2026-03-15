@@ -36,6 +36,7 @@ const publicRoutes = require('./src/routes/public');
 const imageRoutes = require('./src/routes/images');
 const notificationRoutes = require('./src/routes/notifications');
 const auditLogRoutes = require('./src/routes/audit-logs');
+const pageRoutes = require('./src/routes/pages');
 
 // Services
 const { startCleanupScheduler } = require('./src/services/cleanup');
@@ -57,19 +58,28 @@ async function start() {
     await registerContentPlugins(fastify);
     registerErrorHandlers(fastify);
 
+    // Health check at root (for Docker healthcheck)
     fastify.register(healthRoutes);
-    fastify.register(authRoutes);
-    fastify.register(superadminRoutes);
-    fastify.register(locationRoutes);
-    fastify.register(workerRoutes);
-    fastify.register(supervisorRoutes);
-    fastify.register(cleaningRoutes);
-    fastify.register(ticketRoutes);
-    fastify.register(analyticsRoutes);
-    fastify.register(publicRoutes);
-    fastify.register(imageRoutes);
-    fastify.register(notificationRoutes);
-    fastify.register(auditLogRoutes);
+
+    // All API data routes under /api prefix
+    fastify.register(async function apiRoutes(api) {
+      api.register(healthRoutes);
+      api.register(authRoutes);
+      api.register(superadminRoutes);
+      api.register(locationRoutes);
+      api.register(workerRoutes);
+      api.register(supervisorRoutes);
+      api.register(cleaningRoutes);
+      api.register(ticketRoutes);
+      api.register(analyticsRoutes);
+      api.register(publicRoutes);
+      api.register(imageRoutes);
+      api.register(notificationRoutes);
+      api.register(auditLogRoutes);
+    }, { prefix: '/api' });
+
+    // Page-serving routes (org-scoped URLs, short QR, etc.)
+    fastify.register(pageRoutes);
 
     await fastify.listen({
       port: parseInt(process.env.PORT) || 3000,

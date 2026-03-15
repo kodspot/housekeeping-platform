@@ -32,13 +32,14 @@ jobs:
           SES_SMTP_USER: ${{ secrets.SES_SMTP_USER }}
           SES_SMTP_PASS: ${{ secrets.SES_SMTP_PASS }}
           SES_FROM_EMAIL: ${{ secrets.SES_FROM_EMAIL }}
+          DATA_ENCRYPTION_KEY: ${{ secrets.DATA_ENCRYPTION_KEY }}
         with:
           host: ${{ secrets.GCP_HOST }}
           username: ${{ secrets.GCP_USERNAME }}
           key: ${{ secrets.GCP_SSH_PRIVATE_KEY }}
           timeout: 30m
           command_timeout: 30m
-          envs: NODE_ENV,PORT,APP_URL,COOKIE_DOMAIN,DATABASE_URL,DB_USER,DB_PASSWORD,DB_NAME,JWT_SECRET,COOKIE_SECRET,ADMIN_KEY,R2_ACCOUNT_ID,R2_ACCESS_KEY_ID,R2_SECRET_ACCESS_KEY,R2_BUCKET_NAME,CORS_ORIGINS,SES_SMTP_HOST,SES_SMTP_USER,SES_SMTP_PASS,SES_FROM_EMAIL
+          envs: NODE_ENV,PORT,APP_URL,COOKIE_DOMAIN,DATABASE_URL,DB_USER,DB_PASSWORD,DB_NAME,JWT_SECRET,COOKIE_SECRET,ADMIN_KEY,R2_ACCOUNT_ID,R2_ACCESS_KEY_ID,R2_SECRET_ACCESS_KEY,R2_BUCKET_NAME,CORS_ORIGINS,SES_SMTP_HOST,SES_SMTP_USER,SES_SMTP_PASS,SES_FROM_EMAIL,DATA_ENCRYPTION_KEY
           script: |
             cd ~/housekeeping-platform
             git pull origin main
@@ -65,6 +66,7 @@ jobs:
             SES_SMTP_USER=${SES_SMTP_USER}
             SES_SMTP_PASS=${SES_SMTP_PASS}
             SES_FROM_EMAIL=${SES_FROM_EMAIL}
+            DATA_ENCRYPTION_KEY=${DATA_ENCRYPTION_KEY}
             EOF
 
             chmod 600 .env

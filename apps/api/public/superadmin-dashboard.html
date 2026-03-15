@@ -7,7 +7,8 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
 <link rel="manifest" href="/site.webmanifest">
-<title>Super Admin — Housekeeping</title>
+<meta name="theme-color" content="#1a7f64">
+<title>Super Admin — Kodspot</title>
 <link rel="stylesheet" href="/css/design-system.css">
 <style>
 :root { --sa: #4338CA; --sa-hover: #3730A3; --sa-light: #EEF2FF; --sa-border: #C7D2FE; }
@@ -119,7 +120,7 @@
 </head>
 <body>
 <nav class="topbar topbar-sa">
-  <div class="topbar-left"><span class="topbar-brand">Housekeeping — Super Admin</span></div>
+  <div class="topbar-left"><span class="topbar-brand">Kodspot — Super Admin</span></div>
   <div class="topbar-right">
     <span class="topbar-user" id="userName"></span>
     <button class="btn btn-sm btn-ghost" onclick="App.logoutSA()">Logout</button>
@@ -458,7 +459,7 @@ async function loadOrgs() {
       '<td class="hide-mobile">' + ((o._count && o._count.users) || 0) + '</td>' +
       '<td class="hide-mobile">' + ((o._count && o._count.workers) || 0) + '</td>' +
       '<td class="actions-cell">' +
-        '<button class="btn btn-sm btn-sa" onclick="enterOrg(\'' + o.id + '\',\'' + esc(o.name).replace(/'/g, "\\'") + '\')">Enter</button>' +
+        '<button class="btn btn-sm btn-sa" onclick="enterOrg(\'' + o.id + '\',\'' + esc(o.name).replace(/'/g, "\\'") + '\',\'' + esc(o.slug || '').replace(/'/g, "\\'") + '\')">Enter</button>' +
         '<button class="btn btn-sm btn-outline" onclick="editOrg(\'' + o.id + '\')">Edit</button>' +
         (o.status !== 'DELETED' ? '<button class="btn btn-sm btn-danger" onclick="deleteOrg(\'' + o.id + '\')">Delete</button>' : '') +
       '</td></tr>';
@@ -479,10 +480,12 @@ function populateOrgSelects() {
   $('wOrg').innerHTML = opts || '<option value="" disabled>No active orgs — create one first</option>';
 }
 
-function enterOrg(orgId, orgName) {
+function enterOrg(orgId, orgName, orgSlug) {
   sessionStorage.setItem('selectedOrgId', orgId);
   sessionStorage.setItem('selectedOrgName', orgName);
-  location.href = '/admin-dashboard';
+  sessionStorage.setItem('orgName', orgName);
+  if (orgSlug) sessionStorage.setItem('orgSlug', orgSlug);
+  location.href = orgSlug ? '/' + orgSlug + '/admin-dashboard' : '/admin-dashboard';
 }
 
 function openOrgModal() {

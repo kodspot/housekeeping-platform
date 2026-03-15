@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="manifest" href="/site.webmanifest">
+<meta name="theme-color" content="#1a7f64">
+<title>Privacy Policy — Kodspot</title>
+<link rel="stylesheet" href="/css/design-system.css">
+<style>
+.legal{max-width:800px;margin:0 auto;padding:2rem 1.5rem 4rem}
+.legal h1{font-size:1.6rem;margin-bottom:.5rem}
+.legal .updated{color:var(--text-muted);font-size:.82rem;margin-bottom:2rem}
+.legal h2{font-size:1.15rem;margin:1.8rem 0 .6rem;padding-top:.8rem;border-top:1px solid var(--border)}
+.legal h2:first-of-type{border-top:none}
+.legal p,.legal li{font-size:.92rem;line-height:1.7;color:var(--text-secondary)}
+.legal ul{padding-left:1.5rem;margin:.5rem 0}
+.legal a{color:var(--primary)}
+.legal .back{display:inline-block;margin-bottom:1.5rem;font-size:.85rem;color:var(--primary);text-decoration:none}
+.legal strong{color:var(--text)}
+</style>
+</head>
+<body>
+<div class="legal">
+<a href="/" class="back">← Back to Home</a>
+<h1>Privacy Policy</h1>
+<p class="updated">Last updated: 15 March 2026</p>
+
+<p>Kodspot ("we", "us", "our") operates the Kodspot Housekeeping platform at <strong>app.kodspot.in</strong>. This Privacy Policy explains how we collect, use, store, and protect your personal data in compliance with the <strong>Information Technology Act, 2000</strong>, the <strong>Information Technology (Reasonable Security Practices and Procedures and Sensitive Personal Data or Information) Rules, 2011</strong>, and the <strong>Digital Personal Data Protection Act, 2023 (DPDP Act)</strong> of India.</p>
+
+<h2>1. Data We Collect</h2>
+<p>We collect the following categories of personal data:</p>
+<ul>
+<li><strong>Account Data:</strong> Name, email address, phone number, and role (Admin/Supervisor) — provided during account creation by your organization administrator.</li>
+<li><strong>Authentication Data:</strong> Password (stored as a one-way bcrypt hash — we never store plain-text passwords).</li>
+<li><strong>Operational Data:</strong> Cleaning records, photographs of cleaned locations, timestamps, shift information, and worker assignments.</li>
+<li><strong>Guest Complaint Data:</strong> Name and phone number (optional, provided voluntarily when submitting a complaint via QR code scan), issue type, and description.</li>
+<li><strong>Technical Data:</strong> IP address, browser type, and device information — collected automatically for security and rate-limiting purposes.</li>
+<li><strong>Organization Data:</strong> Organization name, type, address, phone, and email — provided by the Super Admin.</li>
+<li><strong>Sensitive Personal Data (IT Rules 2011, Rule 3):</strong> Aadhar number, blood group, date of birth, and gender — collected optionally for worker records by the organization administrator. These fields are <strong>encrypted at rest</strong> using AES-256-GCM and stored only when provided.</li>
+</ul>
+
+<h2>2. Purpose of Data Collection</h2>
+<p>We process your personal data for the following lawful purposes:</p>
+<ul>
+<li>Providing and operating the housekeeping management platform.</li>
+<li>Authenticating users and managing access control.</li>
+<li>Recording and tracking cleaning operations and facility maintenance.</li>
+<li>Generating analytics and performance reports for organization administrators.</li>
+<li>Processing and routing guest complaints to appropriate staff.</li>
+<li>Ensuring platform security, preventing abuse, and enforcing rate limits.</li>
+<li>Maintaining audit logs for accountability and compliance.</li>
+</ul>
+
+<h2>3. Legal Basis for Processing (DPDP Act 2023)</h2>
+<p>We process personal data based on:</p>
+<ul>
+<li><strong>Consent:</strong> Guest complaint submissions are voluntary. Organization administrators consent on behalf of their staff during onboarding.</li>
+<li><strong>Legitimate Use:</strong> Processing necessary for performing the contract between Kodspot and the subscribing organization.</li>
+<li><strong>Compliance:</strong> Processing required to comply with applicable laws.</li>
+</ul>
+
+<h2>4. Data Storage and Security</h2>
+<ul>
+<li>All data is stored on servers located in <strong>India (Google Cloud Platform, Mumbai region)</strong>.</li>
+<li>Data is encrypted in transit using <strong>TLS 1.2+</strong> (HTTPS enforced via HSTS).</li>
+<li><strong>Sensitive personal data</strong> (Aadhar number, blood group) is <strong>encrypted at rest</strong> using AES-256-GCM with a server-side encryption key.</li>
+<li>Passwords are hashed using <strong>bcrypt</strong> with a cost factor of 12. Passwords must contain at least 8 characters, including uppercase, lowercase, and a digit.</li>
+<li>Photographs are stored in <strong>Cloudflare R2</strong> (encrypted at rest) and automatically deleted after <strong>7 days</strong>.</li>
+<li>Database access is restricted to the application server only; no public database access is permitted.</li>
+<li>All authentication tokens expire after <strong>24 hours</strong>. Changing your password immediately invalidates all existing sessions.</li>
+<li>We implement rate limiting, input validation, and output encoding to prevent common attacks.</li>
+</ul>
+
+<h2>5. Data Retention</h2>
+<ul>
+<li><strong>Cleaning photographs:</strong> Automatically deleted after 7 days.</li>
+<li><strong>Cleaning records and audit logs:</strong> Retained for the duration of the organization's subscription, plus 90 days after termination.</li>
+<li><strong>User accounts:</strong> Retained until the organization administrator deactivates or deletes them, or the organization subscription ends.</li>
+<li><strong>Guest complaint data:</strong> Retained for 180 days, then <strong>automatically anonymized</strong> — guest name and phone number are permanently deleted from the database. The complaint record (issue type, description, resolution) is retained without identifying information.</li>
+</ul>
+
+<h2>6. Data Sharing</h2>
+<p>We do <strong>not</strong> sell, rent, or share your personal data with third parties for marketing purposes. Data may be shared with:</p>
+<ul>
+<li><strong>Your Organization:</strong> Administrators and supervisors within your organization can access data relevant to their role.</li>
+<li><strong>Infrastructure Providers:</strong> Google Cloud Platform (hosting), Cloudflare (CDN/storage), and Amazon Web Services (email delivery) — all bound by their respective data processing agreements.</li>
+<li><strong>Law Enforcement:</strong> When required by a valid court order or legal obligation under Indian law.</li>
+</ul>
+
+<h2>7. Your Rights (DPDP Act 2023)</h2>
+<p>As a Data Principal, you have the right to:</p>
+<ul>
+<li><strong>Access:</strong> Request a summary of the personal data we hold about you.</li>
+<li><strong>Data Portability:</strong> Export your personal data in a machine-readable format (JSON) via the platform's data export feature.</li>
+<li><strong>Correction:</strong> Request correction of inaccurate or incomplete data.</li>
+<li><strong>Erasure:</strong> Request deletion of your personal data (subject to legal and contractual retention requirements).</li>
+<li><strong>Grievance Redressal:</strong> File a complaint with our Grievance Officer (see Section 11).</li>
+<li><strong>Nomination:</strong> Nominate another individual to exercise your rights in case of your death or incapacity.</li>
+</ul>
+<p>To exercise your rights, contact us at the email provided in Section 11. We will respond within <strong>30 days</strong>.</p>
+
+<h2>8. Consent</h2>
+<p>We collect personal data based on the following consent mechanisms:</p>
+<ul>
+<li><strong>Organizational consent:</strong> When an organization subscribes to Kodspot, the administrator consents on behalf of the organization and its staff for data necessary to operate the platform.</li>
+<li><strong>Guest consent:</strong> When a guest provides their name or phone number via the complaint form, they must explicitly check a consent checkbox before submission, acknowledging our Privacy Policy.</li>
+<li><strong>Sensitive data consent:</strong> Worker sensitive data (Aadhar number, blood group) is collected only when voluntarily provided by the organization administrator. Collection is optional and not required for platform functionality.</li>
+</ul>
+
+<h2>9. Data Breach Notification</h2>
+<p>In the event of a personal data breach that is likely to cause harm to Data Principals:</p>
+<ul>
+<li>We will notify the <strong>Data Protection Board of India</strong> without unreasonable delay, and no later than <strong>72 hours</strong> after becoming aware of the breach.</li>
+<li>Affected Data Principals (users or organizations) will be notified via email and/or platform notification as soon as practicable.</li>
+<li>The notification will include: nature of the breach, categories of data affected, likely consequences, and measures taken to address the breach.</li>
+<li>We maintain an internal breach register documenting all incidents, their assessment, and remediation actions.</li>
+</ul>
+
+<h2>10. Cookies and Local Storage</h2>
+<p>We use <strong>sessionStorage</strong> (browser tab-level) to store your authentication token during a session. This data is automatically cleared when you close the browser tab. We do <strong>not</strong> use third-party tracking cookies or analytics scripts.</p>
+
+<h2>11. Children's Data</h2>
+<p>Kodspot is a workplace productivity tool and is not intended for use by individuals under 18 years of age. We do not knowingly collect personal data from children.</p>
+
+<h2>12. Grievance Officer</h2>
+<p>In accordance with the Information Technology Act, 2000 and the DPDP Act, 2023, the Grievance Officer for Kodspot is:</p>
+<ul>
+<li><strong>Name:</strong> Kishan</li>
+<li><strong>Email:</strong> privacy@kodspot.in</li>
+<li><strong>Response Time:</strong> Within 30 days of receipt of complaint.</li>
+</ul>
+<p>If you are unsatisfied with our response, you may file a complaint with the <strong>Data Protection Board of India</strong> as established under the DPDP Act, 2023.</p>
+
+<h2>13. Changes to This Policy</h2>
+<p>We may update this Privacy Policy from time to time. Material changes will be communicated via the platform. The "Last updated" date at the top will reflect the latest revision.</p>
+
+<h2>14. Governing Law</h2>
+<p>This Privacy Policy is governed by and construed in accordance with the laws of <strong>India</strong>. Any disputes shall be subject to the exclusive jurisdiction of the courts in <strong>Bengaluru, Karnataka</strong>.</p>
+</div>
+</body>
+</html>

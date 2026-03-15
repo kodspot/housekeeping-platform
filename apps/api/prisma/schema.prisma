@@ -11,6 +11,7 @@ datasource db {
 model Organization {
   id   String  @id @default(uuid())
   name String
+  slug String  @unique
   type String? // "hospital", "hotel", "office", etc.
 
   address String?
@@ -59,7 +60,8 @@ model User {
   passwordHash String
   role         UserRole
 
-  isActive Boolean @default(true)
+  isActive           Boolean   @default(true)
+  tokenInvalidBefore DateTime?
 
   cleaningRecords CleaningRecord[] @relation("VerifiedBy")
   ticketsCreated  Ticket[]         @relation("TicketCreatedBy")

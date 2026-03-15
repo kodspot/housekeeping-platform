@@ -53,6 +53,37 @@ async function cleanupExpiredImages(logger) {
   return deleted;
 }
 
+/**
+ * DPDP Act compliance: Anonymize guest complaint PII after 180 days.
+ * Nulls out guestName and guestPhone on public tickets older than cutoff.
+ */
+const GUEST_RETENTION_DAYS = 180;
+
+async function anonymizeGuestData(logger) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - GUEST_RETENTION_DAYS);
+
+  const result = await prisma.ticket.updateMany({
+    where: {
+      source: 'PUBLIC',
+      createdAt: { lt: cutoff },
+      OR: [
+        { guestName: { not: null } },
+        { guestPhone: { not: null } }
+      ]
+    },
+    data: {
+      guestName: null,
+      guestPhone: null
+    }
+  });
+
+  if (result.count > 0) {
+    logger.info(`[cleanup] Anonymized PII on ${result.count} guest complaints older than ${GUEST_RETENTION_DAYS} days`);
+  }
+  return result.count;
+}
+
 const INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 function startCleanupScheduler(logger) {
@@ -61,12 +92,18 @@ function startCleanupScheduler(logger) {
     cleanupExpiredImages(logger).catch(err => {
       logger.error('[cleanup] Startup cleanup failed:', err.message);
     });
+    anonymizeGuestData(logger).catch(err => {
+      logger.error('[cleanup] Startup guest anonymization failed:', err.message);
+    });
   }, 30000); // 30 seconds after boot
 
   // Then run every 24 hours
   const interval = setInterval(() => {
     cleanupExpiredImages(logger).catch(err => {
       logger.error('[cleanup] Scheduled cleanup failed:', err.message);
+    });
+    anonymizeGuestData(logger).catch(err => {
+      logger.error('[cleanup] Scheduled guest anonymization failed:', err.message);
     });
   }, INTERVAL_MS);
 

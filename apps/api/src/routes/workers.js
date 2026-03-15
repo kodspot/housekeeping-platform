@@ -3,6 +3,7 @@
 const { z } = require('zod');
 const { prisma } = require('../lib/prisma');
 const { authenticateJWT, requireRole } = require('../middleware/auth');
+const { encryptWorkerPII, decryptWorkerPII } = require('../lib/crypto');
 
 async function workerRoutes(fastify, opts) {
   fastify.addHook('preHandler', authenticateJWT);
@@ -84,7 +85,7 @@ async function workerRoutes(fastify, opts) {
       where: { id, orgId: request.user.orgId }
     });
     if (!worker) return reply.code(404).send({ error: 'Worker not found' });
-    return worker;
+    return decryptWorkerPII(worker);
   });
 
   // Create worker
@@ -119,8 +120,7 @@ async function workerRoutes(fastify, opts) {
       if (dupId) return reply.code(409).send({ error: 'A worker with this employee ID already exists' });
     }
 
-    const worker = await prisma.worker.create({
-      data: {
+    const workerData = {
         orgId,
         name: data.name,
         employeeId: data.employeeId || null,
@@ -135,8 +135,10 @@ async function workerRoutes(fastify, opts) {
         bloodGroup: data.bloodGroup || null,
         aadharNo: data.aadharNo || null,
         notes: data.notes || null
-      }
-    });
+    };
+    encryptWorkerPII(workerData);
+
+    const worker = await prisma.worker.create({ data: workerData });
 
     await prisma.auditLog.create({
       data: {
@@ -219,6 +221,9 @@ async function workerRoutes(fastify, opts) {
         }
       });
     }
+
+    // Encrypt sensitive fields before write
+    encryptWorkerPII(data);
 
     return prisma.worker.update({ where: { id }, data });
   });

@@ -7,7 +7,8 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
 <link rel="manifest" href="/site.webmanifest">
-<title>Super Admin Login — Housekeeping</title>
+<meta name="theme-color" content="#1a7f64">
+<title>Super Admin Login — Kodspot</title>
 <link rel="stylesheet" href="/css/design-system.css">
 <style>
   .auth-card { border-top: 4px solid #4338CA; }
@@ -16,7 +17,7 @@
 </head>
 <body class="auth-layout">
 <div class="auth-card">
-  <h1 class="auth-title">Housekeeping</h1>
+  <h1 class="auth-title">Kodspot</h1>
   <p class="auth-subtitle">Super Admin Access</p>
   <div id="error" class="error-msg"></div>
 
@@ -59,7 +60,7 @@ $('saLoginForm').addEventListener('submit', async function(e) {
   e.preventDefault(); hideErr();
   var btn = $('saBtn'); btn.disabled = true; btn.textContent = 'Signing in...';
   try {
-    var res = await fetch('/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    var res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ adminKey: $('adminKey').value }) });
     var data = await res.json();
     if (!res.ok) { showErr(data.error || 'Login failed'); return; }
@@ -80,7 +81,7 @@ $('bForm').addEventListener('submit', async function(e) {
   e.preventDefault(); hideErr();
   var btn = $('bBtn'); btn.disabled = true; btn.textContent = 'Creating…';
   try {
-    var res = await fetch('/auth/bootstrap', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    var res = await fetch('/api/auth/bootstrap', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ adminKey: $('bKey').value, name: $('bName').value, email: $('bEmail').value, password: $('bPass').value }) });
     var data = await res.json();
     if (!res.ok) { showErr(data.error || 'Bootstrap failed'); return; }
@@ -97,5 +98,8 @@ if (sessionStorage.getItem('token')) {
   if (u.role === 'SUPER_ADMIN') location.href = '/superadmin-dashboard';
 }
 </script>
+<footer style="position:fixed;bottom:0;left:0;right:0;text-align:center;padding:.8rem;font-size:.75rem;color:var(--text-muted)">
+  <a href="/privacy" style="color:var(--text-muted);text-decoration:underline">Privacy Policy</a> · <a href="/terms" style="color:var(--text-muted);text-decoration:underline">Terms of Service</a>
+</footer>
 </body>
 </html>

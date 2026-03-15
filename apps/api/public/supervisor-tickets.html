@@ -7,7 +7,8 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
 <link rel="manifest" href="/site.webmanifest">
-<title>My Tickets — Supervisor</title>
+<meta name="theme-color" content="#1a7f64">
+<title>My Tickets — Kodspot</title>
 <link rel="stylesheet" href="/css/design-system.css">
 <style>
 .sv-shell{max-width:640px;margin:0 auto;padding:1rem .75rem;min-height:calc(100dvh - 56px)}
@@ -120,8 +121,8 @@
 <body>
 <nav class="topbar">
   <div class="topbar-left">
-    <span class="topbar-brand">Housekeeping</span>
-    <div class="sv-nav">
+    <span class="topbar-brand">Kodspot</span>
+    <div class="sv-nav" id="sv-nav">
       <a href="/supervisor-scan" class="sv-nav-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 012-2h2"/><path d="M17 3h2a2 2 0 012 2v2"/><path d="M21 17v2a2 2 0 01-2 2h-2"/><path d="M7 21H5a2 2 0 01-2-2v-2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>Scan</a>
       <a href="/supervisor-tickets" class="sv-nav-link active"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 5H9a2 2 0 00-2 2v10a2 2 0 002 2h6a2 2 0 002-2V7a2 2 0 00-2-2z"/><path d="M12 11h.01"/><path d="M12 15h.01"/></svg>Tickets</a>
     </div>
@@ -175,6 +176,11 @@
 <script>
 if (!App.initSupervisor()) throw '';
 App.initNotifications(App.supFetch, 'supervisor');
+// Fix nav links for org-scoped URLs
+(function() {
+  var nav = document.getElementById('sv-nav');
+  if (nav) { nav.querySelectorAll('a').forEach(function(a) { var pg = a.getAttribute('href').replace(/^\//, ''); a.href = App.orgPath(pg); }); }
+})();
 var esc = App.esc, $ = App.$;
 var allTickets = [];
 var activeTab = 'OPEN';

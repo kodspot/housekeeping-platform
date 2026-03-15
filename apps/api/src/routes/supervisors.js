@@ -1,16 +1,16 @@
-'use strict';
+﻿'use strict';
 
 const bcrypt = require('bcrypt');
 const { z } = require('zod');
 const { prisma } = require('../lib/prisma');
-const { BCRYPT_COST } = require('../lib/security');
+const { BCRYPT_COST, passwordSchema } = require('../lib/security');
 const { authenticateJWT, requireRole } = require('../middleware/auth');
 
 async function supervisorRoutes(fastify, opts) {
   fastify.addHook('preHandler', authenticateJWT);
   fastify.addHook('preHandler', requireRole('ADMIN'));
 
-  // List supervisors — with search, filter, sort, pagination
+  // List supervisors â€” with search, filter, sort, pagination
   fastify.get('/supervisors', async (request) => {
     const { active, search, sort, page, limit } = request.query;
     const orgId = request.user.orgId;
@@ -93,7 +93,7 @@ async function supervisorRoutes(fastify, opts) {
       address: z.string().max(500).optional().or(z.literal('')),
       aadharNo: z.string().max(20).optional().or(z.literal('')),
       notes: z.string().max(1000).optional().or(z.literal('')),
-      password: z.string().min(8).max(100)
+      password: passwordSchema
     });
 
     const data = schema.parse(request.body);
@@ -144,7 +144,7 @@ async function supervisorRoutes(fastify, opts) {
     return supervisor;
   });
 
-  // Update supervisor — with audit logging
+  // Update supervisor â€” with audit logging
   fastify.patch('/supervisors/:id', async (request, reply) => {
     const { id } = request.params;
     const schema = z.object({
@@ -193,7 +193,7 @@ async function supervisorRoutes(fastify, opts) {
       select: { id: true, name: true, email: true, phone: true, designation: true, isActive: true }
     });
 
-    // Audit log — track changes
+    // Audit log â€” track changes
     const changes = {};
     for (const key of Object.keys(data)) {
       if (data[key] !== user[key]) changes[key] = { from: user[key], to: data[key] };
@@ -220,7 +220,7 @@ async function supervisorRoutes(fastify, opts) {
   fastify.patch('/supervisors/:id/password', async (request, reply) => {
     const { id } = request.params;
     const schema = z.object({
-      password: z.string().min(8).max(100)
+      password: passwordSchema
     });
 
     const { password } = schema.parse(request.body);
@@ -273,7 +273,7 @@ async function supervisorRoutes(fastify, opts) {
     return { success: true, message: 'Supervisor deactivated' };
   });
 
-  // Supervisor stats — enriched with flagged, tickets, shifts, top locations, late submissions
+  // Supervisor stats â€” enriched with flagged, tickets, shifts, top locations, late submissions
   fastify.get('/supervisors/:id/stats', async (request, reply) => {
     const { id } = request.params;
     const orgId = request.user.orgId;

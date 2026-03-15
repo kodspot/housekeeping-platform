@@ -7,7 +7,8 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
 <link rel="manifest" href="/site.webmanifest">
-<title>Dashboard — Housekeeping Admin</title>
+<meta name="theme-color" content="#1a7f64">
+<title>Dashboard — Kodspot</title>
 <link rel="stylesheet" href="/css/design-system.css">
 <style>
 /* ── Dashboard KPI Cards ── */
@@ -182,7 +183,7 @@
 <nav class="topbar">
   <div class="topbar-left">
     <button class="nav-toggle" id="nav-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg></button>
-    <span class="topbar-brand">Housekeeping</span>
+    <span class="topbar-brand">Kodspot</span>
     <div class="topbar-nav" id="topbar-nav"></div>
   </div>
   <div class="topbar-right">
@@ -226,12 +227,12 @@
     <div class="dash-section">
       <div class="dash-section-title">Overdue Cleanings <span class="badge badge-danger" id="overdueBadge">0</span></div>
       <div id="overdueList" class="dash-scroll"></div>
-      <div id="overdueViewAll" style="display:none;text-align:right;padding-top:.4rem"><a href="/admin-analytics" class="btn btn-sm btn-outline" style="font-size:.72rem">View All in Analytics →</a></div>
+      <div id="overdueViewAll" style="display:none;text-align:right;padding-top:.4rem"><a href="#" class="btn btn-sm btn-outline dash-link" data-page="admin-analytics" style="font-size:.72rem">View All in Analytics →</a></div>
     </div>
     <div class="dash-section">
       <div class="dash-section-title">Active Tickets <span class="badge badge-warning" id="ticketBadge">0</span></div>
       <div id="ticketList" class="dash-scroll"></div>
-      <div id="ticketViewAll" style="display:none;text-align:right;padding-top:.4rem"><a href="/admin-tickets" class="btn btn-sm btn-outline" style="font-size:.72rem">View All Tickets →</a></div>
+      <div id="ticketViewAll" style="display:none;text-align:right;padding-top:.4rem"><a href="#" class="btn btn-sm btn-outline dash-link" data-page="admin-tickets" style="font-size:.72rem">View All Tickets →</a></div>
     </div>
   </div>
 
@@ -244,7 +245,7 @@
     <div class="dash-section">
       <div class="dash-section-title">Problem Locations <span class="badge badge-warning" id="problemBadge">0</span></div>
       <div id="problemList" class="dash-scroll"></div>
-      <div id="problemViewAll" style="display:none;text-align:right;padding-top:.4rem"><a href="/admin-analytics" class="btn btn-sm btn-outline" style="font-size:.72rem">View Analytics →</a></div>
+      <div id="problemViewAll" style="display:none;text-align:right;padding-top:.4rem"><a href="#" class="btn btn-sm btn-outline dash-link" data-page="admin-analytics" style="font-size:.72rem">View Analytics →</a></div>
     </div>
   </div>
 
@@ -268,6 +269,8 @@
 <script>
 if (!App.initAdmin('dashboard')) throw '';
 App.initNotifications(App.apiFetch);
+// Fix inline "View All" links for org-scoped URLs
+document.querySelectorAll('.dash-link[data-page]').forEach(function(a) { a.href = App.orgPath(a.dataset.page); });
 var esc = App.esc, $ = App.$;
 
 // Skeleton loading
@@ -472,7 +475,7 @@ async function loadTickets() {
   var html = '<table class="dash-table"><thead><tr><th>Title</th><th>Priority</th><th class="hide-mobile">Status</th></tr></thead><tbody>';
   for (var i = 0; i < data.tickets.length; i++) {
     var t = data.tickets[i];
-    html += '<tr style="cursor:pointer" onclick="location.href=\'/admin-tickets\'">' +
+    html += '<tr style="cursor:pointer" onclick="location.href=App.orgPath(\'admin-tickets\')">' +
       '<td>' + esc(t.title) + '<br><span style="font-size:.68rem;color:var(--text-muted)">' + esc(t.location.name) + '</span></td>' +
       '<td><span class="badge ' + (prCls[t.priority] || '') + '">' + t.priority + '</span></td>' +
       '<td class="hide-mobile"><span class="badge ' + (stCls[t.status] || '') + '">' + t.status.replace('_',' ') + '</span></td></tr>';
@@ -487,7 +490,7 @@ async function loadTickets() {
 async function loadWorkerPerf() {
   var data = await App.apiFetchJson('/analytics/workers');
   if (!data || !data.length) {
-    $('workerPerf').innerHTML = '<div class="dash-empty"><span class="dash-empty-icon">👷</span><div class="dash-empty-text">No workers yet</div><div class="dash-empty-sub"><a href="/admin-workers" style="color:var(--primary)">Add workers →</a></div></div>';
+    $('workerPerf').innerHTML = '<div class="dash-empty"><span class="dash-empty-icon">👷</span><div class="dash-empty-text">No workers yet</div><div class="dash-empty-sub"><a href="' + App.orgPath('admin-workers') + '" style="color:var(--primary)">Add workers →</a></div></div>';
     return;
   }
   var workers = data.slice(0, 10);
@@ -500,7 +503,7 @@ async function loadWorkerPerf() {
     var meta = w.cleaningCount + ' cleaned';
     if (w.flaggedCount > 0) meta += ' · <span style="color:#ef4444">' + w.flaggedCount + ' flagged (' + flagPct + '%)</span>';
     if (w.locationTicketCount > 0) meta += ' · ' + w.locationTicketCount + ' ticket' + (w.locationTicketCount > 1 ? 's' : '');
-    html += '<div class="perf-row" style="cursor:pointer" onclick="location.href=\'/admin-workers\'">' +
+    html += '<div class="perf-row" style="cursor:pointer" onclick="location.href=App.orgPath(\'admin-workers\')">' +
       '<div class="perf-name" title="' + esc(w.name) + '">' + esc(w.name) + '</div>' +
       '<div class="perf-bar-wrap">';
     if (pct > 0) {
@@ -511,7 +514,7 @@ async function loadWorkerPerf() {
     html += '</div></div>';
   }
   html += '</div>';
-  if (data.length > 10) html += '<div style="text-align:center;padding:.3rem;font-size:.72rem"><a href="/admin-workers" style="color:var(--primary)">View all ' + data.length + ' workers →</a></div>';
+  if (data.length > 10) html += '<div style="text-align:center;padding:.3rem;font-size:.72rem"><a href="' + App.orgPath('admin-workers') + '" style="color:var(--primary)">View all ' + data.length + ' workers →</a></div>';
   $('workerPerf').innerHTML = html;
 }
 

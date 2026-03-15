@@ -7,7 +7,8 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
 <link rel="manifest" href="/site.webmanifest">
-<title>Housekeeping — Scan</title>
+<meta name="theme-color" content="#1a7f64">
+<title>Report Issue — Kodspot</title>
 <link rel="stylesheet" href="/css/design-system.css">
 <style>
 body{background:var(--bg);min-height:100dvh}
@@ -76,10 +77,16 @@ body{background:var(--bg);min-height:100dvh}
 (function() {
   var root = document.getElementById('root');
 
-  // Extract QR code from URL: /scan/ABC123
+  // Extract QR code from URL: /s/ABC123 or /scan/ABC123
   var pathParts = location.pathname.split('/');
+  var qrCode = '';
+  var sIdx = pathParts.indexOf('s');
   var scanIdx = pathParts.indexOf('scan');
-  var qrCode = scanIdx >= 0 && pathParts[scanIdx + 1] ? pathParts[scanIdx + 1].trim() : '';
+  if (sIdx >= 0 && pathParts[sIdx + 1]) {
+    qrCode = pathParts[sIdx + 1].trim();
+  } else if (scanIdx >= 0 && pathParts[scanIdx + 1]) {
+    qrCode = pathParts[scanIdx + 1].trim();
+  }
 
   if (!qrCode) {
     showError('Invalid QR Code', 'This link does not contain a valid room code. Please scan the QR code again.');
@@ -92,7 +99,9 @@ body{background:var(--bg);min-height:100dvh}
 
   if (supToken) {
     // Supervisor: redirect to cleaning flow
-    location.href = '/supervisor-clean?qr=' + encodeURIComponent(qrCode);
+    var slug = sessionStorage.getItem('orgSlug') || '';
+    var cleanPath = slug ? '/' + slug + '/supervisor-clean' : '/supervisor-clean';
+    location.href = cleanPath + '?qr=' + encodeURIComponent(qrCode);
     return;
   }
 
@@ -101,7 +110,7 @@ body{background:var(--bg);min-height:100dvh}
 
   async function loadLocation(code) {
     try {
-      var res = await fetch('/public/location/' + encodeURIComponent(code));
+      var res = await fetch('/api/public/location/' + encodeURIComponent(code));
       if (!res.ok) {
         var err = await res.json().catch(function() { return {}; });
         if (res.status === 404) {
@@ -147,7 +156,7 @@ body{background:var(--bg);min-height:100dvh}
 
     root.innerHTML =
       '<div class="scan-header">' +
-        '<div class="scan-logo">🏥 Housekeeping</div>' +
+        '<div class="scan-logo">🏥 Kodspot</div>' +
         '<div class="scan-loc">' +
           '<div class="scan-loc-name">' + parentInfo + '</div>' +
           '<div class="scan-loc-meta">' + typeLabel + '</div>' +
@@ -187,6 +196,12 @@ body{background:var(--bg);min-height:100dvh}
           '<label class="form-label">Phone <span class="optional">(optional)</span></label>' +
           '<input type="tel" class="form-input" id="phoneField" placeholder="Phone number" maxlength="20">' +
           '<div class="form-hint">So we can follow up if needed</div>' +
+        '</div>' +
+        '<div class="form-group" style="margin-top:.5rem">' +
+          '<label style="display:flex;align-items:flex-start;gap:.5rem;font-size:.78rem;color:var(--text-secondary);cursor:pointer">' +
+            '<input type="checkbox" id="consentCheck" style="margin-top:2px;flex-shrink:0">' +
+            '<span>I consent to my name and phone being collected to process this complaint, per the <a href="/privacy" target="_blank" style="color:var(--primary)">Privacy Policy</a>.</span>' +
+          '</label>' +
         '</div>' +
         '<button class="btn btn-primary" id="submitBtn" style="width:100%" disabled>Select an issue to submit</button>' +
         '<div id="formError" style="color:var(--danger);font-size:.78rem;text-align:center;margin-top:.5rem;display:none"></div>' +
@@ -242,14 +257,17 @@ body{background:var(--bg);min-height:100dvh}
         var desc = document.getElementById('descField').value.trim();
         if (desc) form.append('description', desc);
         var name = document.getElementById('nameField').value.trim();
-        if (name) form.append('guestName', name);
         var phone = document.getElementById('phoneField').value.trim();
+        if ((name || phone) && !document.getElementById('consentCheck').checked) {
+          throw new Error('Please check the consent box to submit your contact info.');
+        }
+        if (name) form.append('guestName', name);
         if (phone) form.append('guestPhone', phone);
         if (photoInput.files && photoInput.files[0]) {
           form.append('image', photoInput.files[0]);
         }
 
-        var res = await fetch('/public/complaint', { method: 'POST', body: form });
+        var res = await fetch('/api/public/complaint', { method: 'POST', body: form });
         var result = await res.json();
 
         if (!res.ok) {
@@ -268,7 +286,7 @@ body{background:var(--bg);min-height:100dvh}
 
   function showSuccess(ticket) {
     root.innerHTML =
-      '<div class="scan-header"><div class="scan-logo">🏥 Housekeeping</div></div>' +
+      '<div class="scan-header"><div class="scan-logo">🏥 Kodspot</div></div>' +
       '<div class="scan-success">' +
         '<div class="success-icon"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>' +
         '<div class="success-title">Complaint Submitted!</div>' +

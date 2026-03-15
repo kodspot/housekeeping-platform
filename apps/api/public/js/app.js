@@ -4,7 +4,28 @@
    ======================================================================== */
 'use strict';
 window.App = (function () {
-  const API = '';
+  const API = '/api';
+
+  // ─── Org-Aware Routing ───
+  var NON_ORG_PREFIXES = ['superadmin-login', 'superadmin-dashboard', 's', 'api', 'scan'];
+
+  function getOrgSlug() {
+    // Try URL path first: /kle/admin-dashboard → 'kle'
+    var parts = location.pathname.split('/').filter(Boolean);
+    if (parts.length >= 2 && NON_ORG_PREFIXES.indexOf(parts[0]) === -1) {
+      var candidate = parts[0];
+      if (/^[a-z0-9][a-z0-9-]*$/.test(candidate)) return candidate;
+    }
+    // Fallback to sessionStorage (set during login)
+    var stored = sessionStorage.getItem('orgSlug');
+    if (stored && /^[a-z0-9][a-z0-9-]*$/.test(stored)) return stored;
+    return null;
+  }
+
+  function orgPath(page) {
+    var slug = getOrgSlug();
+    return slug ? '/' + slug + '/' + page : '/' + page;
+  }
 
   // ─── DOM Helpers ───
   function $(id) { return document.getElementById(id); }
@@ -55,7 +76,7 @@ window.App = (function () {
   // ─── API Fetch with Retry ───
   function _adminLoginRedirect() {
     try { var u = JSON.parse(sessionStorage.getItem('user') || '{}'); if (u.role === 'SUPER_ADMIN') return '/superadmin-login'; } catch(e) {}
-    return '/admin-login';
+    return orgPath('admin-login');
   }
 
   async function apiFetch(path, opts) {
@@ -72,7 +93,7 @@ window.App = (function () {
     if (opts.body instanceof FormData) delete headers['Content-Type'];
     else if (opts.body && typeof opts.body === 'string') headers['Content-Type'] = 'application/json';
     const fetchOpts = { ...opts, headers };
-    return _doFetch(path, fetchOpts, '/supervisor-login');
+    return _doFetch(path, fetchOpts, orgPath('supervisor-login'));
   }
 
   async function _doFetch(path, fetchOpts, loginRedirect) {
@@ -111,8 +132,9 @@ window.App = (function () {
 
   // ─── Logout ───
   function logout() {
+    var slug = getOrgSlug();
     sessionStorage.clear();
-    location.href = '/admin-login';
+    location.href = slug ? '/' + slug + '/admin-login' : '/admin-login';
   }
 
   function logoutSA() {
@@ -121,9 +143,10 @@ window.App = (function () {
   }
 
   function logoutSup() {
+    var slug = getOrgSlug();
     sessionStorage.removeItem('sup_token');
     sessionStorage.removeItem('sup_user');
-    location.href = '/supervisor-login';
+    location.href = slug ? '/' + slug + '/supervisor-login' : '/supervisor-login';
   }
 
   // ─── Toast Notifications ───
@@ -173,24 +196,36 @@ window.App = (function () {
     });
   }
 
+  // ─── Org Branding in Topbar ───
+  function _applyOrgBrand() {
+    var orgName = sessionStorage.getItem('orgName') || sessionStorage.getItem('selectedOrgName');
+    if (!orgName) return;
+    var brandEl = document.querySelector('.topbar-brand');
+    if (!brandEl) return;
+    brandEl.innerHTML = esc(orgName) + '<span class="topbar-powered"> · Kodspot</span>';
+  }
+
   // ─── Admin Navigation ───
   var NAV_ITEMS = [
-    { href: '/admin-dashboard', label: 'Dashboard' },
-    { href: '/admin-analytics', label: 'Analytics' },
-    { href: '/admin-locations', label: 'Locations' },
-    { href: '/admin-workers', label: 'Workers' },
-    { href: '/admin-supervisors', label: 'Supervisors' },
-    { href: '/admin-cleaning', label: 'Cleaning' },
-    { href: '/admin-tickets', label: 'Tickets' },
-    { href: '/admin-audit-logs', label: 'Audit Logs' }
+    { page: 'admin-dashboard', label: 'Dashboard' },
+    { page: 'admin-analytics', label: 'Analytics' },
+    { page: 'admin-locations', label: 'Locations' },
+    { page: 'admin-workers', label: 'Workers' },
+    { page: 'admin-supervisors', label: 'Supervisors' },
+    { page: 'admin-cleaning', label: 'Cleaning' },
+    { page: 'admin-tickets', label: 'Tickets' },
+    { page: 'admin-audit-logs', label: 'Audit Logs' }
   ];
 
   function initAdmin(activePage) {
-    if (!getToken()) { location.href = '/admin-login'; return false; }
+    if (!getToken()) { location.href = orgPath('admin-login'); return false; }
     var user = getUser();
     if (user.role === 'SUPER_ADMIN' && !sessionStorage.getItem('selectedOrgId')) {
       location.href = '/superadmin-dashboard'; return false;
     }
+
+    // Show org name in topbar
+    _applyOrgBrand();
 
     // Build nav
     var navEl = $('topbar-nav');
@@ -198,8 +233,9 @@ window.App = (function () {
       var html = '';
       for (var i = 0; i < NAV_ITEMS.length; i++) {
         var n = NAV_ITEMS[i];
-        var cls = n.href.indexOf(activePage) !== -1 ? ' class="active"' : '';
-        html += '<a href="' + n.href + '"' + cls + '>' + n.label + '</a>';
+        var href = orgPath(n.page);
+        var cls = n.page.indexOf(activePage) !== -1 ? ' class="active"' : '';
+        html += '<a href="' + href + '"' + cls + '>' + n.label + '</a>';
       }
       navEl.innerHTML = html;
     }
@@ -223,8 +259,9 @@ window.App = (function () {
   }
 
   function initSupervisor() {
-    if (!getSupToken()) { location.href = '/supervisor-login'; return false; }
+    if (!getSupToken()) { location.href = orgPath('supervisor-login'); return false; }
     var user = getSupUser();
+    _applyOrgBrand();
     _buildUserMenu(user, 'supervisor');
     return true;
   }
@@ -619,7 +656,7 @@ window.App = (function () {
         // Navigate to relevant page
         if (entityId && (type === 'ticket_assigned' || type === 'ticket_resolved' || type === 'public_complaint')) {
           _notifPanelEl.classList.remove('open');
-          var base = _notifPage === 'supervisor' ? '/supervisor-tickets' : '/admin-tickets';
+          var base = _notifPage === 'supervisor' ? orgPath('supervisor-tickets') : orgPath('admin-tickets');
           window.location.href = base;
         }
       });
@@ -686,6 +723,7 @@ window.App = (function () {
   // ─── Public API ───
   return {
     $: $, esc: esc, fmtDate: fmtDate, fmtDateShort: fmtDateShort,
+    getOrgSlug: getOrgSlug, orgPath: orgPath,
     getToken: getToken, getSupToken: getSupToken, getUser: getUser, getSupUser: getSupUser,
     adminHeaders: adminHeaders, supHeaders: supHeaders,
     apiFetch: apiFetch, apiFetchJson: apiFetchJson,
@@ -702,3 +740,8 @@ window.App = (function () {
     imgUrl: imgUrl
   };
 })();
+
+// Register service worker for PWA install (desktop + mobile)
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(function() {});
+}

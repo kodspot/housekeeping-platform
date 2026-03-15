@@ -49,8 +49,16 @@ async function publicRoutes(fastify, opts) {
   });
 
   // ── Public: Submit a complaint (no auth required) ──
-  // Rate limited more strictly via the global rate limiter; extra validation here
-  fastify.post('/public/complaint', async (request, reply) => {
+  // Stricter rate limiting for anonymous complaint submission
+  fastify.post('/public/complaint', {
+    config: {
+      rateLimit: {
+        max: 5,
+        timeWindow: 900000,
+        keyGenerator: (req) => req.ip
+      }
+    }
+  }, async (request, reply) => {
     let data, imageUrl = null;
 
     if (request.isMultipart()) {

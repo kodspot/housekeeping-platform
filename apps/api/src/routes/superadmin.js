@@ -1,10 +1,11 @@
-'use strict';
+﻿'use strict';
 
 const bcrypt = require('bcrypt');
 const { z } = require('zod');
 const { prisma } = require('../lib/prisma');
-const { BCRYPT_COST } = require('../lib/security');
+const { BCRYPT_COST, passwordSchema } = require('../lib/security');
 const { authenticateJWT, requireRole } = require('../middleware/auth');
+const { encryptWorkerPII, decryptWorkerPII } = require('../lib/crypto');
 
 async function superadminRoutes(fastify, opts) {
   fastify.addHook('preHandler', authenticateJWT);
@@ -22,7 +23,7 @@ async function superadminRoutes(fastify, opts) {
       where,
       orderBy: { createdAt: 'desc' },
       select: {
-        id: true, name: true, type: true, address: true, phone: true, email: true,
+        id: true, name: true, slug: true, type: true, address: true, phone: true, email: true,
         logoUrl: true, status: true, createdAt: true, updatedAt: true,
         _count: { select: { users: true, workers: true, locations: true } }
       }
@@ -39,6 +40,15 @@ async function superadminRoutes(fastify, opts) {
     });
 
     const data = schema.parse(request.body);
+
+    // Auto-generate slug from name
+    let slug = data.name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').substring(0, 50);
+    if (!slug) slug = 'org-' + Date.now().toString(36).slice(-6);
+    // Ensure uniqueness
+    const existing = await prisma.organization.findUnique({ where: { slug } });
+    if (existing) slug = slug + '-' + Date.now().toString(36).slice(-4);
+    data.slug = slug;
+
     const org = await prisma.organization.create({ data });
 
     await prisma.auditLog.create({
@@ -60,6 +70,7 @@ async function superadminRoutes(fastify, opts) {
     const { id } = request.params;
     const schema = z.object({
       name: z.string().min(1).max(200).trim().optional(),
+      slug: z.string().min(1).max(50).regex(/^[a-z0-9-]+$/).optional(),
       type: z.string().max(50).optional(),
       address: z.string().max(500).optional(),
       phone: z.string().max(20).optional(),
@@ -138,7 +149,7 @@ async function superadminRoutes(fastify, opts) {
       name: z.string().min(1).max(100).trim(),
       email: z.string().email().max(200),
       phone: z.string().max(20).optional(),
-      password: z.string().min(8).max(100)
+      password: passwordSchema
     });
 
     const data = schema.parse(request.body);
@@ -261,7 +272,7 @@ async function superadminRoutes(fastify, opts) {
   fastify.patch('/superadmin/users/:id/password', async (request, reply) => {
     const { id } = request.params;
     const schema = z.object({
-      password: z.string().min(8).max(100)
+      password: passwordSchema
     });
 
     const { password } = schema.parse(request.body);
@@ -300,7 +311,7 @@ async function superadminRoutes(fastify, opts) {
       name: z.string().min(1).max(100).trim(),
       email: z.string().email().max(200),
       phone: z.string().max(20).optional(),
-      password: z.string().min(8).max(100)
+      password: passwordSchema
     });
 
     const data = schema.parse(request.body);
@@ -401,6 +412,7 @@ async function superadminRoutes(fastify, opts) {
       aadharNo: data.aadharNo || null,
       notes: data.notes || null
     };
+    encryptWorkerPII(workerData);
 
     const worker = await prisma.worker.create({ data: workerData });
 
@@ -459,6 +471,8 @@ async function superadminRoutes(fastify, opts) {
     if (data.email === '') data.email = null;
     if (data.dateOfBirth) data.dateOfBirth = new Date(data.dateOfBirth);
     if (data.dateOfJoin) data.dateOfJoin = new Date(data.dateOfJoin);
+
+    encryptWorkerPII(data);
 
     return prisma.worker.update({ where: { id }, data });
   });

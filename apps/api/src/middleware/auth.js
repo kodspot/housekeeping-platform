@@ -13,11 +13,16 @@ async function authenticateJWT(request, reply) {
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
-      select: { id: true, orgId: true, role: true, isActive: true, name: true, email: true }
+      select: { id: true, orgId: true, role: true, isActive: true, name: true, email: true, tokenInvalidBefore: true }
     });
 
     if (!user || !user.isActive) {
       return reply.code(401).send({ error: 'Unauthorized' });
+    }
+
+    // Reject tokens issued before a password change
+    if (user.tokenInvalidBefore && decoded.iat && decoded.iat < Math.floor(user.tokenInvalidBefore.getTime() / 1000)) {
+      return reply.code(401).send({ error: 'Session expired. Please log in again.' });
     }
 
     // For org-scoped users, verify their org is still active

@@ -7,13 +7,14 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
 <link rel="manifest" href="/site.webmanifest">
-<title>Supervisor Login — Housekeeping</title>
+<meta name="theme-color" content="#1a7f64">
+<title>Supervisor Login — Kodspot</title>
 <link rel="stylesheet" href="/css/design-system.css">
 </head>
 <body class="auth-layout" data-theme="dark">
 <div class="auth-card" style="max-width:380px">
-  <h1 class="auth-title text-center">Housekeeping</h1>
-  <p class="auth-subtitle text-center">Supervisor Login</p>
+  <h1 class="auth-title text-center" id="brandTitle">Kodspot</h1>
+  <p class="auth-subtitle text-center" id="brandSub">Supervisor Login</p>
   <form id="loginForm">
     <div class="form-group">
       <label class="form-label" for="email">Email</label>
@@ -29,14 +30,29 @@
 </div>
 <script src="/js/app.js"></script>
 <script>
-if (sessionStorage.getItem('sup_token')) location.href = '/supervisor-scan';
+var orgSlug = App.getOrgSlug();
+if (sessionStorage.getItem('sup_token')) location.href = App.orgPath('supervisor-scan');
+
+// Show org branding if accessed via org URL
+if (orgSlug) {
+  fetch('/api/org/' + encodeURIComponent(orgSlug)).then(function(r) { return r.ok ? r.json() : null; }).then(function(org) {
+    if (org && org.name) {
+      document.getElementById('brandTitle').textContent = org.name;
+      document.getElementById('brandSub').innerHTML = 'Supervisor Login <span style="display:block;margin-top:.3rem;font-size:.72rem;color:var(--text-light)">Powered by Kodspot</span>';
+      document.title = 'Supervisor Login \u2014 ' + org.name;
+      sessionStorage.setItem('orgName', org.name);
+    }
+  }).catch(function() {});
+}
 document.getElementById('loginForm').addEventListener('submit', async function(e) {
   e.preventDefault();
   var btn = document.getElementById('submitBtn'); btn.disabled = true; btn.textContent = 'Signing in…';
   document.getElementById('error').style.display = 'none';
   try {
-    var res = await fetch('/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: document.getElementById('email').value.trim(), password: document.getElementById('password').value }) });
+    var body = { email: document.getElementById('email').value.trim(), password: document.getElementById('password').value };
+    if (orgSlug) body.orgSlug = orgSlug;
+    var res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body) });
     var data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Login failed');
     if (data.user.role !== 'SUPERVISOR') {
@@ -45,7 +61,10 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
     }
     sessionStorage.setItem('sup_token', data.token);
     sessionStorage.setItem('sup_user', JSON.stringify({ id: data.user.id, name: data.user.name, orgId: data.user.orgId }));
-    location.href = '/supervisor-scan';
+    var slug = data.user.orgSlug || orgSlug;
+    if (slug) sessionStorage.setItem('orgSlug', slug);
+    if (data.user.orgName) sessionStorage.setItem('orgName', data.user.orgName);
+    location.href = slug ? '/' + slug + '/supervisor-scan' : '/supervisor-scan';
   } catch (err) {
     document.getElementById('error').textContent = err.message;
     document.getElementById('error').style.display = 'block';
@@ -53,5 +72,8 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
   }
 });
 </script>
+<footer style="position:fixed;bottom:0;left:0;right:0;text-align:center;padding:.8rem;font-size:.75rem;color:var(--text-muted)">
+  <a href="/privacy" style="color:var(--text-muted);text-decoration:underline">Privacy Policy</a> · <a href="/terms" style="color:var(--text-muted);text-decoration:underline">Terms of Service</a>
+</footer>
 </body>
 </html>

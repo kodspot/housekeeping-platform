@@ -107,7 +107,7 @@ async function locationRoutes(fastify, opts) {
     });
     if (!location) return reply.code(404).send({ error: 'Location not found' });
 
-    const qrData = `${APP_URL}/scan/${location.qrCode}`;
+    const qrData = `${APP_URL}/s/${location.qrCode}`;
     const svg = await QRCode.toString(qrData, {
       type: 'svg',
       errorCorrectionLevel: 'M',

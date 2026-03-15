@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Allow: /privacy
+Allow: /terms
+Disallow: /api/
+Disallow: /superadmin-login
+Disallow: /superadmin-dashboard
+Disallow: /s/
+Disallow: /scan/
+
+Sitemap: https://app.kodspot.in/sitemap.xml
