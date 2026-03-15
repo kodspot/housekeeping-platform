@@ -89,4 +89,17 @@ jobs:
               docker compose logs --tail 50 api
               exit 1
             }
+            echo "✅ API is healthy!"
+
+            # Force Caddy to re-provision TLS certificates
+            echo "Restarting Caddy for TLS certificate provisioning..."
+            docker compose restart caddy
+            sleep 15
+
+            # Show Caddy status and logs
+            echo "--- Caddy Status ---"
+            docker compose ps caddy
+            echo "--- Caddy Logs ---"
+            docker compose logs --tail 30 caddy
+
             echo "✅ Deployment successful!"
