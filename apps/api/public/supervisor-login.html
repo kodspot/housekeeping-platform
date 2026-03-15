@@ -34,7 +34,7 @@ var orgSlug = App.getOrgSlug();
 var mod = App.getModule();
 
 // Redirect if already logged in as supervisor
-if (sessionStorage.getItem('sup_token')) location.href = App.orgPath('supervisor-scan');
+if (localStorage.getItem('sup_token')) location.href = App.orgPath('supervisor-scan');
 
 // Initialise module PWA (dynamic manifest + service worker)
 App.initModulePWA();
@@ -46,7 +46,7 @@ if (orgSlug) {
       document.getElementById('brandTitle').textContent = org.name;
       document.getElementById('brandSub').innerHTML = 'Supervisor Login <span style="display:block;margin-top:.3rem;font-size:.72rem;color:var(--text-light)">Powered by Kodspot</span>';
       document.title = 'Supervisor Login \u2014 ' + org.name;
-      sessionStorage.setItem('orgName', org.name);
+      localStorage.setItem('orgName', org.name);
     }
   }).catch(function() {});
 }
@@ -66,12 +66,12 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
       document.getElementById('error').textContent = 'Access restricted to supervisors';
       document.getElementById('error').style.display = 'block'; btn.disabled = false; btn.textContent = 'Sign In'; return;
     }
-    sessionStorage.setItem('sup_token', data.token);
-    sessionStorage.setItem('sup_user', JSON.stringify({ id: data.user.id, name: data.user.name, orgId: data.user.orgId }));
+    localStorage.setItem('sup_token', data.token);
+    localStorage.setItem('sup_user', JSON.stringify({ id: data.user.id, name: data.user.name, orgId: data.user.orgId }));
     var slug = data.user.orgSlug || orgSlug;
-    if (slug) sessionStorage.setItem('orgSlug', slug);
-    if (data.user.orgName) sessionStorage.setItem('orgName', data.user.orgName);
-    sessionStorage.setItem('activeModule', mod);
+    if (slug) localStorage.setItem('orgSlug', slug);
+    if (data.user.orgName) localStorage.setItem('orgName', data.user.orgName);
+    localStorage.setItem('activeModule', mod);
     location.href = App.orgPath('supervisor-scan');
   } catch (err) {
     document.getElementById('error').textContent = err.message;

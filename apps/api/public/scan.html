@@ -95,12 +95,12 @@ body{background:var(--bg);min-height:100dvh}
 
   // Check if supervisor is logged in
   var supToken = null;
-  try { supToken = sessionStorage.getItem('sup_token'); } catch(e) {}
+  try { supToken = localStorage.getItem('sup_token'); } catch(e) {}
 
   if (supToken) {
     // Supervisor: redirect to cleaning flow (module-scoped)
-    var slug = sessionStorage.getItem('orgSlug') || '';
-    var mod = sessionStorage.getItem('activeModule') || 'hk';
+    var slug = localStorage.getItem('orgSlug') || '';
+    var mod = localStorage.getItem('activeModule') || 'hk';
     var cleanPath = slug ? '/' + slug + '/' + mod + '/supervisor-clean' : '/supervisor-clean';
     location.href = cleanPath + '?qr=' + encodeURIComponent(qrCode);
     return;
@@ -136,7 +136,7 @@ body{background:var(--bg);min-height:100dvh}
       if (modules.length > 1) {
         showModulePicker(loc, code, modules);
       } else {
-        sessionStorage.setItem('activeModule', modules[0]);
+        localStorage.setItem('activeModule', modules[0]);
         showComplaintForm(loc, code);
       }
     } catch(e) {
@@ -172,7 +172,7 @@ body{background:var(--bg);min-height:100dvh}
       '</div>';
 
     window._pickModule = function(mod) {
-      sessionStorage.setItem('activeModule', mod);
+      localStorage.setItem('activeModule', mod);
       showComplaintForm(loc, code);
     };
   }

@@ -172,8 +172,9 @@ async function lookupCode(raw) {
   _lookingUp = true;
   try {
   var code = raw;
-  var scanMatch = raw.match(/\/scan\/([A-Za-z0-9]+)/);
-  if (scanMatch) code = scanMatch[1];
+  // Extract code from full URL patterns: /s/CODE, /scan/CODE, or just the code
+  var urlMatch = raw.match(/\/s(?:can)?\/([A-Za-z0-9]+)/i);
+  if (urlMatch) code = urlMatch[1];
   code = code.toUpperCase().trim();
   $('manualCode').value = code;
   $('locationCard').classList.remove('show');

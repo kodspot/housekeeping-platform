@@ -50,18 +50,18 @@
 
 <script src="/js/app.js?v=2"></script>
 <script>
-// If sessionStorage is empty, wait for session transfer from opener
+// If localStorage is empty, wait for session transfer from opener
 (function() {
   var _booted = false;
   function safeBoot() { if (!_booted) { _booted = true; boot(); } }
 
-  if (sessionStorage.getItem('token')) { safeBoot(); return; }
+  if (localStorage.getItem('token')) { safeBoot(); return; }
   // Listen for session data via postMessage from parent window
   function onMessage(e) {
     if (e.origin !== location.origin) return;
     if (e.data && e.data.type === 'session-transfer' && e.data.data) {
       var d = e.data.data;
-      for (var k in d) { if (d.hasOwnProperty(k)) sessionStorage.setItem(k, d[k]); }
+      for (var k in d) { if (d.hasOwnProperty(k)) localStorage.setItem(k, d[k]); }
       window.removeEventListener('message', onMessage);
       safeBoot();
     }
@@ -69,7 +69,7 @@
   window.addEventListener('message', onMessage);
   // Timeout: if no message received in 5s, redirect to login
   setTimeout(function() {
-    if (!sessionStorage.getItem('token')) {
+    if (!localStorage.getItem('token')) {
       window.removeEventListener('message', onMessage);
       location.href = App.orgPath('admin-login');
     }

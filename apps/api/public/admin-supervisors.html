@@ -217,7 +217,7 @@
         <div class="form-row" id="pwGroup">
           <div class="form-group"><label class="form-label">Password *</label>
             <div class="sv-pw-wrap">
-              <input class="form-input" type="password" id="sPassword" minlength="8" maxlength="100">
+              <input class="form-input" type="password" id="sPassword" minlength="8" maxlength="100" placeholder="Min 8, uppercase, lowercase & number">
               <button type="button" class="sv-pw-toggle" onclick="togglePw('sPassword',this)">Show</button>
             </div>
           </div>
@@ -259,7 +259,7 @@
       <input type="hidden" id="pwId">
       <div class="form-group"><label class="form-label">New Password *</label>
         <div class="sv-pw-wrap">
-          <input class="form-input" type="password" id="pwNew" required minlength="8" maxlength="100">
+          <input class="form-input" type="password" id="pwNew" required minlength="8" maxlength="100" placeholder="Min 8, uppercase, lowercase & number">
           <button type="button" class="sv-pw-toggle" onclick="togglePw('pwNew',this)">Show</button>
         </div>
       </div>
@@ -488,7 +488,7 @@ $('supForm').addEventListener('submit', async function(e) {
     if (!res) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; return; }
     if (!res.ok) {
       var d = await res.json();
-      App.showError('modalError', d.error || 'Failed');
+      App.showError('modalError', d.error || 'Failed', d.details);
       saveBtn.disabled = false; saveBtn.textContent = 'Save';
       return;
     }
@@ -524,7 +524,7 @@ $('pwForm').addEventListener('submit', async function(e) {
     if (!res) { resetBtn.disabled = false; resetBtn.textContent = 'Reset'; return; }
     if (!res.ok) {
       var d = await res.json();
-      App.showError('pwError', d.error || 'Failed');
+      App.showError('pwError', d.error || 'Failed', d.details);
       resetBtn.disabled = false; resetBtn.textContent = 'Reset';
       return;
     }

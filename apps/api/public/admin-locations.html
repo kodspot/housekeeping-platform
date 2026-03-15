@@ -294,10 +294,10 @@ function openQRPrint() {
   var w = window.open(App.orgPath('admin-qr-print'), '_blank');
   if (!w) { App.toast('Pop-up blocked — please allow pop-ups for this site', 'error'); return; }
   var sessionData = {};
-  for (var i = 0; i < sessionStorage.length; i++) {
-    var key = sessionStorage.key(i);
-    sessionData[key] = sessionStorage.getItem(key);
-  }
+  ['token','user','orgSlug','orgName','activeModule','selectedOrgId','selectedOrgName'].forEach(function(key) {
+    var v = localStorage.getItem(key);
+    if (v) sessionData[key] = v;
+  });
   var attempts = 0;
   var interval = setInterval(function() {
     try { w.postMessage({ type: 'session-transfer', data: sessionData }, location.origin); } catch(e) { clearInterval(interval); }

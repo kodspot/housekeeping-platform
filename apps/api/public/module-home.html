@@ -70,6 +70,18 @@
   var meta = MODULE_META[mod];
   if (!meta) { location.href = '/' + slug; return; }
 
+  // Auto-redirect if already logged in
+  try {
+    var savedSlug = localStorage.getItem('orgSlug');
+    var savedMod  = localStorage.getItem('activeModule');
+    if (savedSlug === slug && savedMod === mod) {
+      var tk  = localStorage.getItem('token');
+      var stk = localStorage.getItem('sup_token');
+      if (tk) { location.href = '/' + slug + '/' + mod + '/admin-dashboard'; return; }
+      if (stk) { location.href = '/' + slug + '/' + mod + '/supervisor-scan'; return; }
+    }
+  } catch(e) {}
+
   // Set dynamic manifest for this module
   var manifestLink = document.querySelector('link[rel="manifest"]');
   if (manifestLink) manifestLink.href = '/' + slug + '/' + mod + '/manifest.json';

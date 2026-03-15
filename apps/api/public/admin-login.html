@@ -55,7 +55,7 @@ if (orgSlug) {
       $('brandTitle').textContent = org.name;
       $('brandSub').innerHTML = 'Admin Login <span style="display:block;margin-top:.3rem;font-size:.72rem;color:var(--text-light)">Powered by Kodspot</span>';
       document.title = 'Admin Login — ' + org.name;
-      sessionStorage.setItem('orgName', org.name);
+      localStorage.setItem('orgName', org.name);
     }
   }).catch(function() {});
 }
@@ -85,20 +85,20 @@ $('loginForm').addEventListener('submit', async function(e) {
     if (data.user.role !== 'ADMIN') {
       showErr('This login is for organization admins only.'); return;
     }
-    sessionStorage.setItem('token', data.token);
-    sessionStorage.setItem('user', JSON.stringify(data.user));
-    sessionStorage.setItem('activeModule', mod);
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('user', JSON.stringify(data.user));
+    localStorage.setItem('activeModule', mod);
     var slug = data.user.orgSlug || orgSlug;
-    if (slug) sessionStorage.setItem('orgSlug', slug);
-    if (data.user.orgName) sessionStorage.setItem('orgName', data.user.orgName);
+    if (slug) localStorage.setItem('orgSlug', slug);
+    if (data.user.orgName) localStorage.setItem('orgName', data.user.orgName);
     location.href = App.orgPath('admin-dashboard');
   } catch (err) { showErr('Network error. Please try again.'); }
   finally { btn.disabled = false; btn.textContent = 'Sign In'; }
 });
 
 // Redirect if already logged in as ADMIN
-if (sessionStorage.getItem('token')) {
-  var u = JSON.parse(sessionStorage.getItem('user') || '{}');
+if (localStorage.getItem('token')) {
+  var u = JSON.parse(localStorage.getItem('user') || '{}');
   if (u.role === 'ADMIN') location.href = App.orgPath('admin-dashboard');
 }
 </script>

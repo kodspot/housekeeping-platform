@@ -13,6 +13,7 @@
 <style>
 :root { --sa: #4338CA; --sa-hover: #3730A3; --sa-light: #EEF2FF; --sa-border: #C7D2FE; }
 .topbar-sa { background: var(--sa); }
+.sa-badge { display: inline-block; font-size: .65rem; font-weight: 600; background: rgba(255,255,255,.15); color: rgba(255,255,255,.9); padding: .15rem .5rem; border-radius: 50px; letter-spacing: .03em; white-space: nowrap; }
 .btn-sa { background: var(--sa); color: #fff; border-color: var(--sa); }
 .btn-sa:hover:not(:disabled) { background: var(--sa-hover); }
 
@@ -139,7 +140,10 @@
 </head>
 <body>
 <nav class="topbar topbar-sa">
-  <div class="topbar-left"><span class="topbar-brand">Kodspot — Super Admin</span></div>
+  <div class="topbar-left">
+    <span class="topbar-brand">Kodspot</span>
+    <span class="sa-badge">Super Admin</span>
+  </div>
   <div class="topbar-right">
     <span class="topbar-user" id="userName"></span>
     <button class="btn btn-sm btn-ghost" onclick="App.logoutSA()">Logout</button>
@@ -313,7 +317,7 @@
         <div class="form-group"><label class="form-label">Email *</label><input class="form-input" type="email" id="adminEmail" required maxlength="200"></div>
         <div class="form-group"><label class="form-label">Phone</label><input class="form-input" type="tel" id="adminPhone" maxlength="20"></div>
       </div>
-      <div class="form-group"><label class="form-label">Password * (min 8 chars)</label><input class="form-input" type="password" id="adminPw" required minlength="8" maxlength="100"></div>
+      <div class="form-group"><label class="form-label">Password *</label><input class="form-input" type="password" id="adminPw" required minlength="8" maxlength="100" placeholder="Min 8, uppercase, lowercase & number"></div>
       <div class="modal-actions">
         <button type="button" class="btn btn-outline" onclick="App.closeModal('adminModal')">Cancel</button>
         <button type="submit" class="btn btn-sa">Create Admin</button>
@@ -334,7 +338,7 @@
         <div class="form-group"><label class="form-label">Email *</label><input class="form-input" type="email" id="supEmail" required maxlength="200"></div>
         <div class="form-group"><label class="form-label">Phone</label><input class="form-input" type="tel" id="supPhone" maxlength="20"></div>
       </div>
-      <div class="form-group"><label class="form-label">Password * (min 8 chars)</label><input class="form-input" type="password" id="supPw" required minlength="8" maxlength="100"></div>
+      <div class="form-group"><label class="form-label">Password *</label><input class="form-input" type="password" id="supPw" required minlength="8" maxlength="100" placeholder="Min 8, uppercase, lowercase & number"></div>
       <div class="modal-actions">
         <button type="button" class="btn btn-outline" onclick="App.closeModal('supModal')">Cancel</button>
         <button type="submit" class="btn btn-sa">Create Supervisor</button>
@@ -415,7 +419,7 @@
     <div id="pwError" class="error-msg"></div>
     <form id="pwForm">
       <input type="hidden" id="pwUserId">
-      <div class="form-group"><label class="form-label">New Password * (min 8 chars)</label><input class="form-input" type="password" id="pwNew" required minlength="8" maxlength="100"></div>
+      <div class="form-group"><label class="form-label">New Password *</label><input class="form-input" type="password" id="pwNew" required minlength="8" maxlength="100" placeholder="Min 8, uppercase, lowercase & number"></div>
       <div class="modal-actions">
         <button type="button" class="btn btn-outline" onclick="App.closeModal('pwModal')">Cancel</button>
         <button type="submit" class="btn btn-danger">Reset Password</button>
@@ -434,8 +438,8 @@ var token = App.getToken();
 var user = App.getUser();
 if (!token || user.role !== 'SUPER_ADMIN') { App.logoutSA(); throw ''; }
 App.buildUserMenu(user, 'superadmin');
-sessionStorage.removeItem('selectedOrgId');
-sessionStorage.removeItem('selectedOrgName');
+localStorage.removeItem('selectedOrgId');
+localStorage.removeItem('selectedOrgName');
 
 var allOrgs = [];
 var _orgSearchTimer = null;
@@ -530,10 +534,10 @@ function populateOrgSelects() {
 }
 
 function enterOrg(orgId, orgName, orgSlug) {
-  sessionStorage.setItem('selectedOrgId', orgId);
-  sessionStorage.setItem('selectedOrgName', orgName);
-  sessionStorage.setItem('orgName', orgName);
-  if (orgSlug) sessionStorage.setItem('orgSlug', orgSlug);
+  localStorage.setItem('selectedOrgId', orgId);
+  localStorage.setItem('selectedOrgName', orgName);
+  localStorage.setItem('orgName', orgName);
+  if (orgSlug) localStorage.setItem('orgSlug', orgSlug);
   location.href = orgSlug ? '/' + orgSlug + '/admin-dashboard' : '/admin-dashboard';
 }
 
@@ -660,7 +664,7 @@ $('editUserForm').addEventListener('submit', async function(e) {
   var res = await App.apiFetch('/superadmin/users/' + id, { method: 'PATCH', body: JSON.stringify(body) });
   btn.disabled = false; btn.textContent = 'Save Changes';
   if (!res) return;
-  if (!res.ok) { var d = await res.json(); App.showError('editUserError', d.error || 'Failed'); return; }
+  if (!res.ok) { var d = await res.json(); App.showError('editUserError', d.error || 'Failed', d.details); return; }
   App.closeModal('editUserModal'); App.toast('User updated', 'success');
   loadUsers($('euRole').value || 'ADMIN');
 });
@@ -685,7 +689,7 @@ $('pwForm').addEventListener('submit', async function(e) {
   var res = await App.apiFetch('/superadmin/users/' + $('pwUserId').value + '/password', { method: 'PATCH', body: JSON.stringify({ password: $('pwNew').value }) });
   btn.disabled = false; btn.textContent = 'Reset Password';
   if (!res) return;
-  if (!res.ok) { var d = await res.json(); App.showError('pwError', d.error || 'Failed'); return; }
+  if (!res.ok) { var d = await res.json(); App.showError('pwError', d.error || 'Failed', d.details); return; }
   App.closeModal('pwModal'); App.toast('Password reset successfully', 'success');
 });
 
@@ -707,7 +711,7 @@ $('adminForm').addEventListener('submit', async function(e) {
   var res = await App.apiFetch('/superadmin/organizations/' + orgId + '/admins', { method: 'POST', body: JSON.stringify(body) });
   btn.disabled = false; btn.textContent = 'Create Admin';
   if (!res) return;
-  if (!res.ok) { var d = await res.json(); App.showError('adminError', d.error || 'Failed'); return; }
+  if (!res.ok) { var d = await res.json(); App.showError('adminError', d.error || 'Failed', d.details); return; }
   App.closeModal('adminModal'); App.toast('Admin created successfully', 'success'); loadUsers('ADMIN'); loadStats();
 });
 
@@ -729,7 +733,7 @@ $('supForm').addEventListener('submit', async function(e) {
   var res = await App.apiFetch('/superadmin/organizations/' + orgId + '/supervisors', { method: 'POST', body: JSON.stringify(body) });
   btn.disabled = false; btn.textContent = 'Create Supervisor';
   if (!res) return;
-  if (!res.ok) { var d = await res.json(); App.showError('supError', d.error || 'Failed'); return; }
+  if (!res.ok) { var d = await res.json(); App.showError('supError', d.error || 'Failed', d.details); return; }
   App.closeModal('supModal'); App.toast('Supervisor created successfully', 'success'); loadUsers('SUPERVISOR'); loadStats();
 });
 
@@ -793,7 +797,7 @@ $('workerForm').addEventListener('submit', async function(e) {
   var res = await App.apiFetch(url, { method: method, body: JSON.stringify(body) });
   btn.disabled = false; btn.textContent = 'Save';
   if (!res) return;
-  if (!res.ok) { var d = await res.json(); App.showError('workerError', d.error || 'Failed'); return; }
+  if (!res.ok) { var d = await res.json(); App.showError('workerError', d.error || 'Failed', d.details); return; }
   App.closeModal('workerModal'); App.toast(id ? 'Worker updated' : 'Worker created', 'success'); loadWorkers();
 });
 

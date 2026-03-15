@@ -19,7 +19,7 @@ window.App = (function () {
       var candidate = parts[0];
       if (/^[a-z0-9][a-z0-9-]*$/.test(candidate)) return candidate;
     }
-    var stored = sessionStorage.getItem('orgSlug');
+    var stored = localStorage.getItem('orgSlug');
     if (stored && /^[a-z0-9][a-z0-9-]*$/.test(stored)) return stored;
     return null;
   }
@@ -31,8 +31,8 @@ window.App = (function () {
       var mod = parts[1];
       if (VALID_MODULES.indexOf(mod) !== -1) return mod;
     }
-    // Fallback to sessionStorage
-    var stored = sessionStorage.getItem('activeModule');
+    // Fallback to localStorage
+    var stored = localStorage.getItem('activeModule');
     if (stored && VALID_MODULES.indexOf(stored) !== -1) return stored;
     return 'hk'; // default
   }
@@ -72,23 +72,23 @@ window.App = (function () {
   }
 
   // ─── Token Management ───
-  function getToken() { return sessionStorage.getItem('token'); }
-  function getSupToken() { return sessionStorage.getItem('sup_token'); }
+  function getToken() { return localStorage.getItem('token'); }
+  function getSupToken() { return localStorage.getItem('sup_token'); }
 
   function getUser() {
-    try { return JSON.parse(sessionStorage.getItem('user') || '{}'); }
+    try { return JSON.parse(localStorage.getItem('user') || '{}'); }
     catch { return {}; }
   }
 
   function getSupUser() {
-    try { return JSON.parse(sessionStorage.getItem('sup_user') || '{}'); }
+    try { return JSON.parse(localStorage.getItem('sup_user') || '{}'); }
     catch { return {}; }
   }
 
   function adminHeaders(includeJson) {
     const h = { 'Authorization': 'Bearer ' + getToken() };
     if (includeJson !== false) h['Content-Type'] = 'application/json';
-    const oid = sessionStorage.getItem('selectedOrgId');
+    const oid = localStorage.getItem('selectedOrgId');
     if (oid) h['X-Org-Id'] = oid;
     return h;
   }
@@ -99,7 +99,7 @@ window.App = (function () {
 
   // ─── API Fetch with Retry ───
   function _adminLoginRedirect() {
-    try { var u = JSON.parse(sessionStorage.getItem('user') || '{}'); if (u.role === 'SUPER_ADMIN') return '/superadmin-login'; } catch(e) {}
+    try { var u = JSON.parse(localStorage.getItem('user') || '{}'); if (u.role === 'SUPER_ADMIN') return '/superadmin-login'; } catch(e) {}
     return orgPath('admin-login');
   }
 
@@ -126,7 +126,9 @@ window.App = (function () {
       try {
         var res = await fetch(API + path, fetchOpts);
         if (res.status === 401) {
-          sessionStorage.clear();
+          localStorage.removeItem('token'); localStorage.removeItem('user');
+          localStorage.removeItem('sup_token'); localStorage.removeItem('sup_user');
+          localStorage.removeItem('selectedOrgId'); localStorage.removeItem('selectedOrgName');
           location.href = loginRedirect;
           return null;
         }
@@ -155,23 +157,27 @@ window.App = (function () {
   }
 
   // ─── Logout ───
+  function _clearAuthStorage() {
+    ['token','user','sup_token','sup_user','orgSlug','orgName','activeModule','selectedOrgId','selectedOrgName'].forEach(function(k) { localStorage.removeItem(k); });
+  }
+
   function logout() {
     var slug = getOrgSlug();
     var mod = getModule();
-    sessionStorage.clear();
+    _clearAuthStorage();
     location.href = slug ? '/' + slug + '/' + mod + '/admin-login' : '/admin-login';
   }
 
   function logoutSA() {
-    sessionStorage.clear();
+    _clearAuthStorage();
     location.href = '/superadmin-login';
   }
 
   function logoutSup() {
     var slug = getOrgSlug();
     var mod = getModule();
-    sessionStorage.removeItem('sup_token');
-    sessionStorage.removeItem('sup_user');
+    localStorage.removeItem('sup_token');
+    localStorage.removeItem('sup_user');
     location.href = slug ? '/' + slug + '/' + mod + '/supervisor-login' : '/supervisor-login';
   }
 
@@ -224,7 +230,7 @@ window.App = (function () {
 
   // ─── Org Branding in Topbar ───
   function _applyOrgBrand() {
-    var orgName = sessionStorage.getItem('orgName') || sessionStorage.getItem('selectedOrgName');
+    var orgName = localStorage.getItem('orgName') || localStorage.getItem('selectedOrgName');
     if (!orgName) return;
     var brandEl = document.querySelector('.topbar-brand');
     if (!brandEl) return;
@@ -246,13 +252,13 @@ window.App = (function () {
   function initAdmin(activePage) {
     if (!getToken()) { location.href = orgPath('admin-login'); return false; }
     var user = getUser();
-    if (user.role === 'SUPER_ADMIN' && !sessionStorage.getItem('selectedOrgId')) {
+    if (user.role === 'SUPER_ADMIN' && !localStorage.getItem('selectedOrgId')) {
       location.href = '/superadmin-dashboard'; return false;
     }
 
     // Store active module from URL
     var mod = getModule();
-    sessionStorage.setItem('activeModule', mod);
+    localStorage.setItem('activeModule', mod);
 
     // Init module PWA (manifest + SW)
     initModulePWA();
@@ -280,7 +286,7 @@ window.App = (function () {
     if (user.role === 'SUPER_ADMIN') {
       var banner = $('sa-banner');
       if (banner) {
-        var orgName = sessionStorage.getItem('selectedOrgName') || 'Org';
+        var orgName = localStorage.getItem('selectedOrgName') || 'Org';
         banner.innerHTML = '<span>Viewing as Super Admin: <b>' + esc(orgName) + '</b></span><a href="/superadmin-dashboard">\u2190 Back to Super Admin</a>';
         banner.style.display = 'flex';
       }
@@ -297,7 +303,7 @@ window.App = (function () {
 
     // Store active module from URL
     var mod = getModule();
-    sessionStorage.setItem('activeModule', mod);
+    localStorage.setItem('activeModule', mod);
 
     // Init module PWA (manifest + SW)
     initModulePWA();
@@ -466,10 +472,14 @@ window.App = (function () {
   });
 
   // ─── Error Helpers ───
-  function showError(id, msg) {
+  function showError(id, msg, details) {
     var el = $(id);
     if (!el) return;
-    el.textContent = msg;
+    if (details && details.length) {
+      el.innerHTML = details.map(function(d) { return esc(d); }).join('<br>');
+    } else {
+      el.textContent = msg;
+    }
     el.classList.add('show');
     el.style.display = 'block';
   }
