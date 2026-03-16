@@ -300,54 +300,72 @@ async function attendanceRoutes(fastify, opts) {
     const fromDate = new Date(from + 'T00:00:00Z');
     const toDate = new Date(to + 'T00:00:00Z');
 
-    const where = {
-      orgId,
-      date: { gte: fromDate, lte: toDate }
-    };
-    if (shift && VALID_SHIFTS.includes(shift)) where.shift = shift;
+    // Get roster data for working days calculation
+    const rosterWhere = { orgId, date: { gte: fromDate, lte: toDate } };
+    if (shift && VALID_SHIFTS.includes(shift)) rosterWhere.shift = shift;
+    if (locationId) rosterWhere.locationId = locationId;
 
-    // Build worker filter: combine workerId and locationId if both provided
+    const allRosters = await prisma.dutyRoster.findMany({
+      where: rosterWhere,
+      select: { date: true, workers: { select: { workerId: true } } }
+    });
+
+    const workingDaysMap = {};
+    const rosteredIds = new Set();
+    for (const r of allRosters) {
+      const dk = r.date.toISOString().split('T')[0];
+      for (const w of r.workers) {
+        rosteredIds.add(w.workerId);
+        if (!workingDaysMap[w.workerId]) workingDaysMap[w.workerId] = new Set();
+        workingDaysMap[w.workerId].add(dk);
+      }
+    }
+
+    // Build attendance filter
+    const where = { orgId, date: { gte: fromDate, lte: toDate } };
+    if (shift && VALID_SHIFTS.includes(shift)) where.shift = shift;
     let workerIdFilter = null;
     if (workerId) workerIdFilter = [workerId];
-    if (locationId) {
-      // Get workers from all duty rosters for this location in the date range
-      const rosters = await prisma.dutyRoster.findMany({
-        where: { orgId, locationId, date: { gte: fromDate, lte: toDate }, ...(shift ? { shift } : {}) },
-        select: { id: true }
-      });
-      const rosterWorkers = rosters.length > 0
-        ? await prisma.dutyRosterWorker.findMany({
-            where: { rosterId: { in: rosters.map(r => r.id) } },
-            select: { workerId: true },
-            distinct: ['workerId']
-          })
-        : [];
-      const locationWorkerIds = rosterWorkers.map(rw => rw.workerId);
+    if (locationId && rosteredIds.size > 0) {
+      const locIds = [...rosteredIds];
       if (workerIdFilter) {
-        const set = new Set(locationWorkerIds);
+        const set = new Set(locIds);
         workerIdFilter = workerIdFilter.filter(id => set.has(id));
       } else {
-        workerIdFilter = locationWorkerIds;
+        workerIdFilter = locIds;
       }
     }
     if (workerIdFilter) where.workerId = workerIdFilter.length === 1 ? workerIdFilter[0] : { in: workerIdFilter };
 
-    // Get all records
     const records = await prisma.attendance.findMany({
       where,
-      include: {
-        worker: { select: { id: true, name: true, employeeId: true } }
-      },
+      include: { worker: { select: { id: true, name: true, employeeId: true } } },
       orderBy: [{ date: 'asc' }, { worker: { name: 'asc' } }]
     });
 
-    // Aggregate per worker
+    // Get details for all rostered workers (includes those with zero attendance)
+    const rosteredWorkers = rosteredIds.size > 0
+      ? await prisma.worker.findMany({
+          where: { id: { in: [...rosteredIds] }, orgId },
+          select: { id: true, name: true, employeeId: true }
+        })
+      : [];
+
+    // Initialize stats from roster
     const workerStats = {};
+    for (const w of rosteredWorkers) {
+      workerStats[w.id] = {
+        worker: w, present: 0, absent: 0, leave: 0, halfDay: 0, total: 0,
+        workingDays: workingDaysMap[w.id]?.size || 0
+      };
+    }
+
+    // Fill in attendance records
     for (const r of records) {
       if (!workerStats[r.workerId]) {
         workerStats[r.workerId] = {
-          worker: r.worker,
-          present: 0, absent: 0, leave: 0, halfDay: 0, total: 0
+          worker: r.worker, present: 0, absent: 0, leave: 0, halfDay: 0, total: 0,
+          workingDays: workingDaysMap[r.workerId]?.size || 0
         };
       }
       const s = workerStats[r.workerId];
@@ -358,32 +376,34 @@ async function attendanceRoutes(fastify, opts) {
       else if (r.status === 'HALF_DAY') s.halfDay++;
     }
 
-    // Calculate percentages
-    const workerSummaries = Object.values(workerStats).map(s => ({
-      ...s,
-      attendancePercent: s.total > 0 ? Math.round(((s.present + s.halfDay * 0.5) / s.total) * 100) : 0
-    }));
+    // Calculate percentages using working days as denominator
+    const workerSummaries = Object.values(workerStats).map(s => {
+      const wd = s.workingDays || s.total;
+      return {
+        ...s,
+        workingDays: wd,
+        unmarked: Math.max(0, wd - s.total),
+        attendancePercent: wd > 0 ? Math.round(((s.present + s.halfDay * 0.5) / wd) * 100) : 0
+      };
+    });
     workerSummaries.sort((a, b) => a.worker.name.localeCompare(b.worker.name));
 
-    // Overall summary
-    let totalPresent = 0, totalAbsent = 0, totalLeave = 0, totalHalfDay = 0, totalRecords = 0;
+    let totP = 0, totA = 0, totL = 0, totH = 0, totWD = 0, totU = 0;
     for (const s of workerSummaries) {
-      totalPresent += s.present;
-      totalAbsent += s.absent;
-      totalLeave += s.leave;
-      totalHalfDay += s.halfDay;
-      totalRecords += s.total;
+      totP += s.present; totA += s.absent; totL += s.leave; totH += s.halfDay;
+      totWD += s.workingDays; totU += s.unmarked;
     }
 
     return {
       workers: workerSummaries,
       summary: {
-        totalRecords,
-        present: totalPresent,
-        absent: totalAbsent,
-        leave: totalLeave,
-        halfDay: totalHalfDay,
-        attendancePercent: totalRecords > 0 ? Math.round(((totalPresent + totalHalfDay * 0.5) / totalRecords) * 100) : 0
+        totalWorkingDays: totWD,
+        present: totP,
+        absent: totA,
+        leave: totL,
+        halfDay: totH,
+        unmarked: totU,
+        attendancePercent: totWD > 0 ? Math.round(((totP + totH * 0.5) / totWD) * 100) : 0
       },
       dateRange: { from, to }
     };
@@ -403,24 +423,37 @@ async function attendanceRoutes(fastify, opts) {
     const fromDate = new Date(from + 'T00:00:00Z');
     const toDate = new Date(to + 'T00:00:00Z');
 
-    // Build query (same logic as report endpoint)
+    // Get roster data for working days + date-wise grid
+    const rosterWhere = { orgId, date: { gte: fromDate, lte: toDate } };
+    if (shift && VALID_SHIFTS.includes(shift)) rosterWhere.shift = shift;
+    if (locationId) rosterWhere.locationId = locationId;
+
+    const allRosters = await prisma.dutyRoster.findMany({
+      where: rosterWhere,
+      select: { date: true, workers: { select: { workerId: true } } }
+    });
+
+    const workingDaysMap = {};
+    const rosteredIds = new Set();
+    const dateStatusMap = {}; // workerId -> dateKey -> status (null = rostered but unmarked)
+    for (const r of allRosters) {
+      const dk = r.date.toISOString().split('T')[0];
+      for (const w of r.workers) {
+        rosteredIds.add(w.workerId);
+        if (!workingDaysMap[w.workerId]) workingDaysMap[w.workerId] = new Set();
+        workingDaysMap[w.workerId].add(dk);
+        if (!dateStatusMap[w.workerId]) dateStatusMap[w.workerId] = {};
+        dateStatusMap[w.workerId][dk] = null;
+      }
+    }
+
+    // Build attendance filter
     const where = { orgId, date: { gte: fromDate, lte: toDate } };
     if (shift && VALID_SHIFTS.includes(shift)) where.shift = shift;
     let workerIdFilter = null;
     if (workerId) workerIdFilter = [workerId];
-    if (locationId) {
-      const rosters = await prisma.dutyRoster.findMany({
-        where: { orgId, locationId, date: { gte: fromDate, lte: toDate }, ...(shift ? { shift } : {}) },
-        select: { id: true }
-      });
-      const rw = rosters.length > 0
-        ? await prisma.dutyRosterWorker.findMany({
-            where: { rosterId: { in: rosters.map(r => r.id) } },
-            select: { workerId: true },
-            distinct: ['workerId']
-          })
-        : [];
-      const locIds = rw.map(r => r.workerId);
+    if (locationId && rosteredIds.size > 0) {
+      const locIds = [...rosteredIds];
       if (workerIdFilter) {
         const set = new Set(locIds);
         workerIdFilter = workerIdFilter.filter(id => set.has(id));
@@ -436,11 +469,35 @@ async function attendanceRoutes(fastify, opts) {
       orderBy: [{ date: 'asc' }, { worker: { name: 'asc' } }]
     });
 
+    // Fill date-wise status from attendance
+    for (const r of records) {
+      const dk = r.date.toISOString().split('T')[0];
+      if (!dateStatusMap[r.workerId]) dateStatusMap[r.workerId] = {};
+      dateStatusMap[r.workerId][dk] = r.status;
+    }
+
+    // Get rostered worker details
+    const rosteredWorkers = rosteredIds.size > 0
+      ? await prisma.worker.findMany({
+          where: { id: { in: [...rosteredIds] }, orgId },
+          select: { id: true, name: true, employeeId: true }
+        })
+      : [];
+
     // Aggregate per worker
     const workerStats = {};
+    for (const w of rosteredWorkers) {
+      workerStats[w.id] = {
+        worker: w, present: 0, absent: 0, leave: 0, halfDay: 0, total: 0,
+        workingDays: workingDaysMap[w.id]?.size || 0
+      };
+    }
     for (const r of records) {
       if (!workerStats[r.workerId]) {
-        workerStats[r.workerId] = { worker: r.worker, present: 0, absent: 0, leave: 0, halfDay: 0, total: 0 };
+        workerStats[r.workerId] = {
+          worker: r.worker, present: 0, absent: 0, leave: 0, halfDay: 0, total: 0,
+          workingDays: workingDaysMap[r.workerId]?.size || 0
+        };
       }
       const s = workerStats[r.workerId];
       s.total++;
@@ -450,50 +507,57 @@ async function attendanceRoutes(fastify, opts) {
       else if (r.status === 'HALF_DAY') s.halfDay++;
     }
 
-    const rows = Object.values(workerStats).map(s => ({
-      ...s,
-      attendancePercent: s.total > 0 ? Math.round(((s.present + s.halfDay * 0.5) / s.total) * 100) : 0
-    }));
+    const rows = Object.values(workerStats).map(s => {
+      const wd = s.workingDays || s.total;
+      return {
+        ...s, workingDays: wd,
+        unmarked: Math.max(0, wd - s.total),
+        attendancePercent: wd > 0 ? Math.round(((s.present + s.halfDay * 0.5) / wd) * 100) : 0
+      };
+    });
     rows.sort((a, b) => a.worker.name.localeCompare(b.worker.name));
 
-    let totP = 0, totA = 0, totL = 0, totH = 0, totR = 0;
-    for (const s of rows) { totP += s.present; totA += s.absent; totL += s.leave; totH += s.halfDay; totR += s.total; }
-    const avgPct = totR > 0 ? Math.round(((totP + totH * 0.5) / totR) * 100) : 0;
+    let totP = 0, totA = 0, totL = 0, totH = 0, totWD = 0, totU = 0;
+    for (const s of rows) { totP += s.present; totA += s.absent; totL += s.leave; totH += s.halfDay; totWD += s.workingDays; totU += s.unmarked; }
+    const avgPct = totWD > 0 ? Math.round(((totP + totH * 0.5) / totWD) * 100) : 0;
 
-    // Resolve location name if filter was used
+    // Resolve location + org name
     let locationLabel = null;
     if (locationId) {
       const loc = await prisma.location.findFirst({
         where: { id: locationId, orgId },
         select: { name: true, parent: { select: { name: true } } }
       });
-      if (loc) locationLabel = loc.parent ? loc.parent.name + ' → ' + loc.name : loc.name;
+      if (loc) locationLabel = loc.parent ? loc.parent.name + ' \u2192 ' + loc.name : loc.name;
     }
-
-    // Resolve org name
     const org = await prisma.organization.findFirst({ where: { id: orgId }, select: { name: true } });
     const orgName = org?.name || 'Organization';
+
+    // Generate all dates in range
+    const allDates = [];
+    let dt = new Date(fromDate);
+    while (dt <= toDate) {
+      allDates.push(dt.toISOString().split('T')[0]);
+      dt = new Date(dt.getTime() + 86400000);
+    }
 
     // ── Generate PDF ──
     const doc = new PDFDocument({ size: 'A4', margins: { top: 40, bottom: 40, left: 40, right: 40 } });
     const chunks = [];
     doc.on('data', c => chunks.push(c));
-
     const pdfReady = new Promise((resolve, reject) => {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
     });
 
-    const pageW = doc.page.width - 80; // usable width
+    const pageW = doc.page.width - 80;
 
-    // Header
+    // ── Page 1: Summary + Worker Table ──
     doc.fontSize(16).font('Helvetica-Bold').text('Attendance Report', { align: 'center' });
     doc.moveDown(0.3);
-    doc.fontSize(10).font('Helvetica').fillColor('#555555')
-      .text(orgName, { align: 'center' });
+    doc.fontSize(10).font('Helvetica').fillColor('#555555').text(orgName, { align: 'center' });
     doc.moveDown(0.6);
 
-    // Info line
     const fromFmt = new Date(from + 'T00:00:00Z').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
     const toFmt = new Date(to + 'T00:00:00Z').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
     let infoLine = 'Period: ' + fromFmt + '  to  ' + toFmt;
@@ -508,42 +572,45 @@ async function attendanceRoutes(fastify, opts) {
     doc.roundedRect(40, boxY, pageW, 50, 4).fillAndStroke('#f0fdf4', '#d1fae5');
     doc.fillColor('#333333').fontSize(9).font('Helvetica-Bold');
     const sY = boxY + 12;
-    const colW = pageW / 6;
+    const sumColW = pageW / 7;
     const summaryItems = [
-      ['Total Records', String(totR)],
+      ['Working Days', String(totWD)],
       ['Present', String(totP)],
       ['Absent', String(totA)],
       ['Leave', String(totL)],
       ['Half Day', String(totH)],
+      ['Unmarked', String(totU)],
       ['Avg Attendance', avgPct + '%']
     ];
     for (let i = 0; i < summaryItems.length; i++) {
-      const x = 40 + i * colW;
-      doc.fontSize(12).font('Helvetica-Bold').fillColor('#166534').text(summaryItems[i][1], x, sY, { width: colW, align: 'center' });
-      doc.fontSize(7).font('Helvetica').fillColor('#555555').text(summaryItems[i][0], x, sY + 16, { width: colW, align: 'center' });
+      const x = 40 + i * sumColW;
+      doc.fontSize(12).font('Helvetica-Bold').fillColor('#166534').text(summaryItems[i][1], x, sY, { width: sumColW, align: 'center' });
+      doc.fontSize(7).font('Helvetica').fillColor('#555555').text(summaryItems[i][0], x, sY + 16, { width: sumColW, align: 'center' });
     }
     doc.restore();
     doc.y = boxY + 60;
 
-    // Table
+    // Worker summary table
     const cols = [
-      { label: '#', width: 25 },
-      { label: 'Worker Name', width: pageW * 0.25 },
-      { label: 'Employee ID', width: pageW * 0.15 },
-      { label: 'Present', width: pageW * 0.1 },
-      { label: 'Absent', width: pageW * 0.1 },
-      { label: 'Leave', width: pageW * 0.1 },
-      { label: 'Half Day', width: pageW * 0.1 },
-      { label: 'Attendance %', width: pageW * 0.15 + 15 }
+      { label: '#', width: 22 },
+      { label: 'Worker Name', width: pageW * 0.22 },
+      { label: 'Employee ID', width: pageW * 0.12 },
+      { label: 'Days', width: pageW * 0.08 },
+      { label: 'Present', width: pageW * 0.09 },
+      { label: 'Absent', width: pageW * 0.09 },
+      { label: 'Leave', width: pageW * 0.08 },
+      { label: 'Half Day', width: pageW * 0.08 },
+      { label: 'Unmarked', width: pageW * 0.08 },
+      { label: 'Att. %', width: pageW * 0.16 - 22 }
     ];
 
     function drawTableHeader(startY) {
       doc.save();
       doc.rect(40, startY, pageW, 22).fill('#0d9488');
       let cx = 40;
-      doc.fontSize(8).font('Helvetica-Bold').fillColor('#ffffff');
+      doc.fontSize(7).font('Helvetica-Bold').fillColor('#ffffff');
       for (const col of cols) {
-        doc.text(col.label, cx + 4, startY + 6, { width: col.width - 8, align: col.label === '#' ? 'center' : 'left' });
+        doc.text(col.label, cx + 3, startY + 7, { width: col.width - 6, align: col.label === '#' ? 'center' : 'left' });
         cx += col.width;
       }
       doc.restore();
@@ -554,32 +621,25 @@ async function attendanceRoutes(fastify, opts) {
       const bg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
       doc.save();
       doc.rect(40, startY, pageW, 20).fill(bg);
-      // Subtle border
       doc.moveTo(40, startY + 20).lineTo(40 + pageW, startY + 20).strokeColor('#e2e8f0').lineWidth(0.5).stroke();
       let cx = 40;
-      doc.fontSize(8).font('Helvetica').fillColor('#334155');
+      doc.fontSize(7.5).font('Helvetica').fillColor('#334155');
       const vals = [
-        String(idx + 1),
-        row.worker.name,
-        row.worker.employeeId || '—',
-        String(row.present),
-        String(row.absent),
-        String(row.leave),
-        String(row.halfDay),
+        String(idx + 1), row.worker.name, row.worker.employeeId || '\u2014',
+        String(row.workingDays), String(row.present), String(row.absent),
+        String(row.leave), String(row.halfDay), String(row.unmarked),
         row.attendancePercent + '%'
       ];
       for (let i = 0; i < cols.length; i++) {
         const align = i === 0 ? 'center' : 'left';
-        // Color coding for attendance %
-        if (i === 7) {
+        if (i === 9) {
           const pct = row.attendancePercent;
           doc.fillColor(pct >= 80 ? '#166534' : pct >= 50 ? '#92400e' : '#991b1b');
           doc.font('Helvetica-Bold');
-        } else if (i >= 3 && i <= 6) {
-          doc.font('Helvetica');
-          doc.fillColor('#334155');
+        } else {
+          doc.font('Helvetica').fillColor('#334155');
         }
-        doc.text(vals[i], cx + 4, startY + 5, { width: cols[i].width - 8, align });
+        doc.text(vals[i], cx + 3, startY + 5, { width: cols[i].width - 6, align });
         cx += cols[i].width;
       }
       doc.restore();
@@ -587,9 +647,7 @@ async function attendanceRoutes(fastify, opts) {
     }
 
     let tableY = drawTableHeader(doc.y);
-
     for (let i = 0; i < rows.length; i++) {
-      // Check if we need a new page
       if (tableY + 24 > doc.page.height - 60) {
         doc.addPage();
         tableY = drawTableHeader(40);
@@ -602,7 +660,84 @@ async function attendanceRoutes(fastify, opts) {
       doc.fontSize(10).font('Helvetica').fillColor('#999999').text('No attendance records found for this period.', { align: 'center' });
     }
 
-    // Footer — bottom of last page
+    // ── Page 2+: Date-wise Breakdown ──
+    if (rows.length > 0 && allDates.length > 0) {
+      doc.addPage();
+      doc.fontSize(13).font('Helvetica-Bold').fillColor('#333333').text('Date-wise Breakdown', { align: 'center' });
+      doc.moveDown(0.3);
+      doc.fontSize(9).font('Helvetica').fillColor('#555555').text(infoLine, { align: 'center' });
+      doc.moveDown(0.6);
+
+      const nameW = 100;
+      const idW = 60;
+      const fixedW = nameW + idW;
+      const dateColW = Math.min(38, Math.max(18, (pageW - fixedW) / allDates.length));
+      const gridW = fixedW + dateColW * allDates.length;
+      const fs = allDates.length > 20 ? 5.5 : allDates.length > 10 ? 6.5 : 7.5;
+      const rowH = allDates.length > 20 ? 14 : 16;
+
+      function drawDateHeader(startY) {
+        doc.save();
+        doc.rect(40, startY, gridW, 28).fill('#0d9488');
+        doc.fontSize(fs).font('Helvetica-Bold').fillColor('#ffffff');
+        doc.text('Worker', 42, startY + 10, { width: nameW - 4 });
+        doc.text('ID', 40 + nameW + 2, startY + 10, { width: idW - 4 });
+        for (let i = 0; i < allDates.length; i++) {
+          const x = 40 + fixedW + i * dateColW;
+          const dd = new Date(allDates[i] + 'T00:00:00Z');
+          const day = String(dd.getUTCDate());
+          const mon = dd.toLocaleDateString('en', { month: 'short', timeZone: 'UTC' }).substring(0, 3);
+          doc.fontSize(fs).text(day, x, startY + 4, { width: dateColW, align: 'center' });
+          doc.fontSize(fs - 1.5).text(mon, x, startY + 4 + fs + 1, { width: dateColW, align: 'center' });
+        }
+        doc.restore();
+        return startY + 28;
+      }
+
+      const statusColors = { PRESENT: '#166534', ABSENT: '#991b1b', LEAVE: '#92400e', HALF_DAY: '#1e40af' };
+      const statusLabels = { PRESENT: 'P', ABSENT: 'A', LEAVE: 'L', HALF_DAY: 'H' };
+
+      function drawDateRow(row, startY) {
+        const bg = '#ffffff';
+        doc.save();
+        doc.rect(40, startY, gridW, rowH).fill(bg);
+        doc.moveTo(40, startY + rowH).lineTo(40 + gridW, startY + rowH).strokeColor('#e2e8f0').lineWidth(0.5).stroke();
+        doc.fontSize(fs).font('Helvetica').fillColor('#334155');
+        doc.text(row.worker.name, 42, startY + (rowH - fs) / 2, { width: nameW - 4, ellipsis: true });
+        doc.fontSize(fs - 0.5).fillColor('#94a3b8');
+        doc.text(row.worker.employeeId || '\u2014', 40 + nameW + 2, startY + (rowH - fs) / 2, { width: idW - 4 });
+        for (let i = 0; i < allDates.length; i++) {
+          const x = 40 + fixedW + i * dateColW;
+          const status = dateStatusMap[row.worker.id]?.[allDates[i]];
+          if (status) {
+            doc.fontSize(fs).font('Helvetica-Bold').fillColor(statusColors[status] || '#334155');
+            doc.text(statusLabels[status] || '?', x, startY + (rowH - fs) / 2, { width: dateColW, align: 'center' });
+          } else if (status === null) {
+            doc.fontSize(fs).font('Helvetica').fillColor('#94a3b8');
+            doc.text('\u2014', x, startY + (rowH - fs) / 2, { width: dateColW, align: 'center' });
+          }
+        }
+        doc.restore();
+        return startY + rowH;
+      }
+
+      let gridY = drawDateHeader(doc.y);
+      for (let i = 0; i < rows.length; i++) {
+        if (gridY + rowH + 4 > doc.page.height - 60) {
+          doc.addPage();
+          gridY = drawDateHeader(40);
+        }
+        gridY = drawDateRow(rows[i], gridY);
+      }
+
+      // Legend
+      gridY += 15;
+      if (gridY + 30 > doc.page.height - 60) { doc.addPage(); gridY = 50; }
+      doc.fontSize(7).font('Helvetica').fillColor('#555555');
+      doc.text('P = Present    A = Absent    L = Leave    H = Half Day    \u2014 = Rostered (Unmarked)    (blank) = Not Rostered', 40, gridY, { width: pageW });
+    }
+
+    // Footer on last page
     const now = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' });
     doc.fontSize(7).font('Helvetica').fillColor('#999999');
     doc.text('Generated on ' + now + '  |  ' + orgName, 40, doc.page.height - 35, { width: pageW, align: 'center' });
