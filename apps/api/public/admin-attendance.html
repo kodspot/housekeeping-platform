@@ -169,6 +169,7 @@
           <option value="GENERAL">General</option>
         </select>
         <button class="btn btn-sm btn-primary" onclick="loadReport()">Generate</button>
+        <button class="btn btn-sm btn-outline" id="pdfBtn" onclick="downloadPDF()" title="Download PDF"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> PDF</button>
       </div>
 
       <div id="reportSummary" style="display:none;margin-bottom:.75rem">
@@ -395,6 +396,50 @@ async function loadReport() {
     html += '</tr>';
   }
   $('reportBody').innerHTML = html;
+}
+
+// ── Download PDF ──
+async function downloadPDF() {
+  var from = $('reportFrom').value;
+  var to = $('reportTo').value;
+  if (!from || !to) {
+    App.toast('Select date range first', 'error');
+    return;
+  }
+
+  var url = '/attendance/report/pdf?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to);
+  var locationId = $('reportFloor').value;
+  var shift = $('reportShift').value;
+  if (locationId) url += '&locationId=' + encodeURIComponent(locationId);
+  if (shift) url += '&shift=' + encodeURIComponent(shift);
+
+  var btn = $('pdfBtn');
+  btn.disabled = true;
+  var origHTML = btn.innerHTML;
+  btn.innerHTML = 'Generating…';
+
+  try {
+    var res = await App.apiFetch(url);
+    if (!res || !res.ok) {
+      var errData = null;
+      try { errData = await res.json(); } catch(e) {}
+      App.toast((errData && errData.error) || 'Failed to generate PDF', 'error');
+      btn.disabled = false;
+      btn.innerHTML = origHTML;
+      return;
+    }
+    var blob = await res.blob();
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'attendance-report-' + from + '-to-' + to + '.pdf';
+    a.click();
+    setTimeout(function() { URL.revokeObjectURL(a.href); }, 5000);
+  } catch (e) {
+    App.toast('Failed to download PDF', 'error');
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = origHTML;
 }
 </script>
 </body>

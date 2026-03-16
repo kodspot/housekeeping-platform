@@ -57,12 +57,15 @@
 .wk-detail-val{font-size:.88rem;font-weight:500;word-break:break-word}
 
 /* ── Floor assignment modal ── */
-.fa-loc-list{display:flex;flex-direction:column;gap:.35rem;max-height:320px;overflow-y:auto}
-.fa-loc{display:flex;align-items:center;gap:.55rem;background:var(--bg);padding:.55rem .7rem;border-radius:var(--radius);cursor:pointer;font-size:.85rem;border:1px solid transparent;transition:border-color .1s}
+.fa-loc-list{display:flex;flex-direction:column;gap:.25rem;max-height:380px;overflow-y:auto}
+.fa-group{margin-bottom:.35rem}
+.fa-group-hdr{font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;padding:.4rem .5rem .2rem;display:flex;align-items:center;gap:.35rem}
+.fa-group-hdr svg{opacity:.5}
+.fa-loc{display:flex;align-items:center;gap:.55rem;background:var(--bg);padding:.5rem .7rem .5rem 1.4rem;border-radius:var(--radius);cursor:pointer;font-size:.85rem;border:1px solid transparent;transition:border-color .1s}
 .fa-loc:hover{border-color:var(--border)}
 .fa-loc input[type=checkbox]{width:20px;height:20px;accent-color:var(--primary);flex-shrink:0}
 .fa-loc-name{flex:1}
-.fa-loc-parent{font-size:.68rem;color:var(--text-muted)}
+.fa-loc-type{font-size:.62rem;color:var(--text-muted);background:var(--surface);padding:.1rem .35rem;border-radius:var(--radius-sm);text-transform:uppercase;letter-spacing:.03em}
 .fa-primary{font-size:.68rem;color:var(--primary);font-weight:600;cursor:pointer;white-space:nowrap}
 
 /* ── Pagination ── */
@@ -622,15 +625,26 @@ async function showStats(id, name) {
 }
 
 /* ── Floor Assignments ── */
-var allLocations = null;
+var locationTree = null;
 
-async function loadAllLocations() {
-  if (allLocations) return allLocations;
-  var res = await App.apiFetch('/locations');
+async function loadLocationTree() {
+  if (locationTree) return locationTree;
+  var res = await App.apiFetch('/locations?tree=true');
   if (!res) return [];
   var data = await res.json();
-  allLocations = data.locations || data || [];
-  return allLocations;
+  locationTree = data.locations || data || [];
+  return locationTree;
+}
+
+function renderLocCheckbox(loc, assignedMap, depth) {
+  var checked = assignedMap[loc.id] !== undefined;
+  var typeBadge = loc.type ? '<span class="fa-loc-type">' + esc(loc.type.replace('_', ' ')) + '</span>' : '';
+  var indent = depth > 1 ? ' style="padding-left:' + (0.7 + depth * 0.7) + 'rem"' : '';
+  return '<label class="fa-loc"' + indent + '>' +
+    '<input type="checkbox" value="' + loc.id + '"' + (checked ? ' checked' : '') + '>' +
+    '<span class="fa-loc-name">' + esc(loc.name) + '</span>' +
+    typeBadge +
+  '</label>';
 }
 
 async function openFloors(workerId, name) {
@@ -640,7 +654,7 @@ async function openFloors(workerId, name) {
   App.hideError('floorError');
   App.openModal('floorModal');
 
-  var locations = await loadAllLocations();
+  var tree = await loadLocationTree();
   var res = await App.apiFetch('/workers/' + workerId + '/assignments');
   var assigned = [];
   if (res && res.ok) {
@@ -652,20 +666,34 @@ async function openFloors(workerId, name) {
     assignedMap[assigned[i].locationId] = assigned[i].isPrimary || false;
   }
 
-  if (!locations.length) {
+  if (!tree.length) {
     $('floorList').innerHTML = '<div style="text-align:center;padding:1rem;color:var(--text-muted);font-size:.85rem">No locations found. Create locations first.</div>';
     return;
   }
 
   var html = '';
-  for (var j = 0; j < locations.length; j++) {
-    var loc = locations[j];
-    var checked = assignedMap[loc.id] !== undefined;
-    html += '<label class="fa-loc">' +
-      '<input type="checkbox" value="' + loc.id + '"' + (checked ? ' checked' : '') + '>' +
-      '<span class="fa-loc-name">' + esc(loc.name) + '</span>' +
-      '<span class="fa-loc-parent">' + esc(loc.type || '') + '</span>' +
-    '</label>';
+  for (var j = 0; j < tree.length; j++) {
+    var root = tree[j];
+    var children = root.children || [];
+
+    if (children.length > 0) {
+      // Has children — show as group header, list children as checkboxes
+      html += '<div class="fa-group">';
+      html += '<div class="fa-group-hdr"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>' + esc(root.name) + '</div>';
+      for (var k = 0; k < children.length; k++) {
+        var child = children[k];
+        html += renderLocCheckbox(child, assignedMap, 1);
+        // Also render grandchildren (rooms under floors)
+        var grandchildren = child.children || [];
+        for (var g = 0; g < grandchildren.length; g++) {
+          html += renderLocCheckbox(grandchildren[g], assignedMap, 2);
+        }
+      }
+      html += '</div>';
+    } else {
+      // Standalone location (no children) — show as flat checkbox
+      html += renderLocCheckbox(root, assignedMap, 0);
+    }
   }
   $('floorList').innerHTML = html;
 }
