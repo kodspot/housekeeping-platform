@@ -659,22 +659,16 @@ async function attendanceRoutes(fastify, opts) {
   fastify.get('/attendance/floors', async (request) => {
     const orgId = request.user.orgId;
     const { date, shift } = request.query;
+    const isAdmin = request.user.role !== 'SUPERVISOR';
 
-    const where = { orgId };
-    // If date provided, show rosters for that date; otherwise show recent
-    if (date && isValidDateStr(date)) {
-      where.date = new Date(date + 'T00:00:00Z');
-    }
-    if (shift && VALID_SHIFTS.includes(shift)) {
-      where.shift = shift;
-    }
-    // Supervisors only see their own rosters
-    if (request.user.role === 'SUPERVISOR') {
-      where.supervisorId = request.user.id;
-    }
+    // Get roster data for the date/shift
+    const rosterWhere = { orgId };
+    if (date && isValidDateStr(date)) rosterWhere.date = new Date(date + 'T00:00:00Z');
+    if (shift && VALID_SHIFTS.includes(shift)) rosterWhere.shift = shift;
+    if (!isAdmin) rosterWhere.supervisorId = request.user.id;
 
     const rosters = await prisma.dutyRoster.findMany({
-      where,
+      where: rosterWhere,
       select: {
         id: true,
         locationId: true,
@@ -687,6 +681,37 @@ async function attendanceRoutes(fastify, opts) {
       orderBy: [{ location: { parent: { name: 'asc' } } }, { location: { name: 'asc' } }]
     });
 
+    // Build roster map keyed by locationId
+    const rosterByLoc = {};
+    for (const r of rosters) {
+      rosterByLoc[r.locationId] = r;
+    }
+
+    // For admin: include ALL active non-building locations (floors, rooms, etc.)
+    if (isAdmin) {
+      const allLocations = await prisma.location.findMany({
+        where: { orgId, isActive: true, parentId: { not: null } },
+        select: { id: true, name: true, type: true, parent: { select: { name: true } } },
+        orderBy: [{ parent: { name: 'asc' } }, { name: 'asc' }]
+      });
+
+      const floors = allLocations.map(loc => {
+        const r = rosterByLoc[loc.id];
+        return {
+          id: loc.id,
+          rosterId: r ? r.id : null,
+          name: loc.name,
+          type: loc.type,
+          parentName: loc.parent?.name || null,
+          supervisorName: r ? r.supervisor.name : null,
+          workerCount: r ? r._count.workers : 0
+        };
+      });
+
+      return { floors };
+    }
+
+    // For supervisor: only rostered floors
     return {
       floors: rosters.map(r => ({
         id: r.location.id,

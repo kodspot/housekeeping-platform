@@ -211,20 +211,19 @@
 </div>
 
 <!-- Worker Selection Modal -->
-<div class="modal-backdrop" id="workerModal" style="display:none" onclick="if(event.target===this)closeWorkerModal()">
-  <div class="modal" style="max-width:480px">
-    <div class="modal-header">
-      <h3 style="font-size:.95rem;font-weight:700">Manage Workers</h3>
-      <button class="modal-close" onclick="closeWorkerModal()">✕</button>
+<div class="modal-overlay" id="workerModal">
+  <div class="modal" style="max-width:480px;padding:0">
+    <div style="padding:1rem 1rem .5rem;display:flex;justify-content:space-between;align-items:center">
+      <h2 class="modal-title" style="margin:0">Manage Workers</h2>
     </div>
-    <div class="modal-body" style="padding:.75rem 1rem">
+    <div style="padding:0 1rem .75rem">
       <input type="text" class="ws-search" id="wsSearch" placeholder="Search workers…" oninput="filterWorkerList()">
       <div class="ws-count" id="wsCount">0 selected</div>
       <div class="ws-list" id="wsList">Loading…</div>
     </div>
-    <div class="modal-footer" style="padding:.75rem 1rem;display:flex;gap:.5rem">
-      <button class="btn btn-ghost" onclick="closeWorkerModal()" style="flex:1">Cancel</button>
-      <button class="btn btn-primary" id="wsSaveBtn" onclick="saveWorkers()" style="flex:1">Save Workers</button>
+    <div class="modal-actions" style="padding:.75rem 1rem;gap:.5rem">
+      <button class="btn btn-outline" onclick="closeWorkerModal()">Cancel</button>
+      <button class="btn btn-primary" id="wsSaveBtn" onclick="saveWorkers()">Save Workers</button>
     </div>
   </div>
 </div>
@@ -550,7 +549,7 @@ function changeFloor() { showSetup(); }
 
 // ── Worker Modal ──
 async function openWorkerModal() {
-  $('workerModal').style.display = 'flex';
+  App.openModal('workerModal');
   $('wsSearch').value = '';
   $('wsList').innerHTML = '<div style="text-align:center;padding:1rem;color:var(--text-muted)">Loading…</div>';
   if (!currentRoster) return;
@@ -609,7 +608,7 @@ function getModalCheckedIds() {
 }
 
 function updateWsCount() { $('wsCount').textContent = getModalCheckedIds().length + ' selected'; }
-function closeWorkerModal() { $('workerModal').style.display = 'none'; }
+function closeWorkerModal() { App.closeModal('workerModal'); }
 
 async function saveWorkers() {
   if (!currentRoster) return;

@@ -234,7 +234,7 @@ async function loadTodayStats() {
   $('kpiUnmarked').textContent = s.unmarked || 0;
 }
 
-// ── Floors dropdown (from DutyRoster) ──
+// ── Floors dropdown (all floors for admin, rostered ones annotated) ──
 async function loadFloors() {
   var date = $('dailyDate').value, shift = $('dailyShift').value;
   var url = '/attendance/floors';
@@ -251,8 +251,8 @@ async function loadFloors() {
   for (var i = 0; i < floors.length; i++) {
     var f = floors[i];
     var label = f.parentName ? f.parentName + ' \u2192 ' + f.name : f.name;
-    if (f.supervisorName) label += ' \u2014 ' + f.supervisorName;
-    opts += '<option value="' + esc(f.id) + '">' + esc(label) + ' (' + f.workerCount + ')</option>';
+    if (f.supervisorName) label += ' \u2014 ' + f.supervisorName + ' (' + f.workerCount + ')';
+    opts += '<option value="' + esc(f.id) + '">' + esc(label) + '</option>';
     if (f.rosterId) floorRosterMap[f.id] = f.rosterId;
   }
   $('dailyFloor').innerHTML = opts;
