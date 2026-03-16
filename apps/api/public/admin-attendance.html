@@ -134,8 +134,8 @@
 
       <div class="att-filters">
         <select id="dailyFloor" onchange="loadDaily()"><option value="">All Floors</option></select>
-        <input type="date" id="dailyDate" onchange="loadDaily()">
-        <select id="dailyShift" onchange="loadDaily()"><option value="">Loading…</option></select>
+        <input type="date" id="dailyDate" onchange="onDailyFilterChange()">
+        <select id="dailyShift" onchange="onDailyFilterChange()"><option value="">Loading…</option></select>
       </div>
 
       <div class="att-scroll" id="dailyScroll">
@@ -199,11 +199,13 @@
 if (!App.initAdmin('admin-attendance')) throw '';
 var esc = App.esc, $ = App.$;
 var activeTab = 'daily';
+var floorRosterMap = {};
 
 // ── Init ──
 (async function init() {
-  await Promise.all([loadTodayStats(), loadFloors(), loadShifts()]);
+  await Promise.all([loadTodayStats(), loadShifts()]);
   setDefaults();
+  await loadFloors();
   await loadDaily();
 })();
 
@@ -232,20 +234,35 @@ async function loadTodayStats() {
   $('kpiUnmarked').textContent = s.unmarked || 0;
 }
 
-// ── Floors dropdown ──
+// ── Floors dropdown (from DutyRoster) ──
 async function loadFloors() {
-  var res = await App.apiFetch('/attendance/floors');
+  var date = $('dailyDate').value, shift = $('dailyShift').value;
+  var url = '/attendance/floors';
+  if (date && shift) url += '?date=' + encodeURIComponent(date) + '&shift=' + encodeURIComponent(shift);
+
+  var res = await App.apiFetch(url);
   if (!res) return;
   var data = await res.json();
   var floors = data.floors || [];
+  floorRosterMap = {};
+
+  var curDaily = $('dailyFloor').value;
   var opts = '<option value="">All Floors</option>';
   for (var i = 0; i < floors.length; i++) {
     var f = floors[i];
-    var label = f.parentName ? f.parentName + ' → ' + f.name : f.name;
+    var label = f.parentName ? f.parentName + ' \u2192 ' + f.name : f.name;
+    if (f.supervisorName) label += ' \u2014 ' + f.supervisorName;
     opts += '<option value="' + esc(f.id) + '">' + esc(label) + ' (' + f.workerCount + ')</option>';
+    if (f.rosterId) floorRosterMap[f.id] = f.rosterId;
   }
   $('dailyFloor').innerHTML = opts;
+  if (curDaily) $('dailyFloor').value = curDaily;
   $('reportFloor').innerHTML = opts;
+}
+
+async function onDailyFilterChange() {
+  await loadFloors();
+  await loadDaily();
 }
 
 // ── Shifts dropdown ──
@@ -298,7 +315,11 @@ async function loadDaily() {
   $('dailyEmpty').style.display = 'none';
 
   var url = '/attendance?date=' + encodeURIComponent(date) + '&shift=' + encodeURIComponent(shift);
-  if (locationId) url += '&locationId=' + encodeURIComponent(locationId);
+  if (locationId) {
+    var rosterId = floorRosterMap[locationId];
+    if (rosterId) url += '&rosterId=' + encodeURIComponent(rosterId);
+    else url += '&locationId=' + encodeURIComponent(locationId);
+  }
 
   var res = await App.apiFetch(url);
   if (!res) return;

@@ -33,6 +33,7 @@ model Organization {
   shiftConfigs      ShiftConfig[]
   workerAssignments WorkerAssignment[]
   attendance        Attendance[]
+  dutyRosters       DutyRoster[]
 
   deletedAt  DateTime?
   purgeAfter DateTime?
@@ -72,6 +73,7 @@ model User {
   ticketsAssigned  Ticket[]         @relation("TicketAssignedTo")
   notifications    Notification[]
   attendanceMarked Attendance[]     @relation("AttendanceMarkedBy")
+  dutyRosters      DutyRoster[]     @relation("DutyRosterSupervisor")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -106,6 +108,7 @@ model Worker {
   ticketsResolved Ticket[]           @relation("TicketResolvedWorkers")
   assignments     WorkerAssignment[]
   attendance      Attendance[]
+  dutyRosterAssignments DutyRosterWorker[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -133,6 +136,7 @@ model Location {
   cleaningSchedules CleaningSchedule[]
   tickets           Ticket[]
   workerAssignments WorkerAssignment[]
+  dutyRosters       DutyRoster[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -423,4 +427,37 @@ model Attendance {
   @@index([orgId, date])
   @@index([workerId, date])
   @@index([markedById])
+}
+
+model DutyRoster {
+  id    String       @id @default(uuid())
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  date         DateTime @db.Date
+  shift        Shift
+  locationId   String
+  location     Location @relation(fields: [locationId], references: [id])
+  supervisorId String
+  supervisor   User     @relation("DutyRosterSupervisor", fields: [supervisorId], references: [id])
+
+  workers DutyRosterWorker[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([orgId, date, shift, supervisorId])
+  @@index([orgId, date])
+  @@index([orgId, date, shift, locationId])
+}
+
+model DutyRosterWorker {
+  id       String     @id @default(uuid())
+  rosterId String
+  roster   DutyRoster @relation(fields: [rosterId], references: [id], onDelete: Cascade)
+  workerId String
+  worker   Worker     @relation(fields: [workerId], references: [id])
+
+  @@unique([rosterId, workerId])
+  @@index([workerId])
 }

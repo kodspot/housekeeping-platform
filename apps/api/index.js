@@ -38,6 +38,7 @@ const imageRoutes = require('./src/routes/images');
 const notificationRoutes = require('./src/routes/notifications');
 const auditLogRoutes = require('./src/routes/audit-logs');
 const attendanceRoutes = require('./src/routes/attendance');
+const dutyRosterRoutes = require('./src/routes/duty-roster');
 const pageRoutes = require('./src/routes/pages');
 
 // Services
@@ -79,6 +80,7 @@ async function start() {
       api.register(notificationRoutes);
       api.register(auditLogRoutes);
       api.register(attendanceRoutes);
+      api.register(dutyRosterRoutes);
     }, { prefix: '/api' });
 
     // Page-serving routes (org-scoped URLs, short QR, etc.)

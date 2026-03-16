@@ -19,10 +19,10 @@ async function attendanceRoutes(fastify, opts) {
   fastify.addHook('preHandler', requireRole('ADMIN', 'SUPERVISOR'));
 
   // ── Get attendance for a date/shift/location ──
-  // Returns all workers assigned to that location with their attendance status
+  // Workers come from DutyRoster (if rosterId or locationId provided)
   fastify.get('/attendance', async (request, reply) => {
     const orgId = request.user.orgId;
-    const { date, shift, locationId } = request.query;
+    const { date, shift, locationId, rosterId } = request.query;
 
     if (!date || !isValidDateStr(date)) {
       return reply.code(400).send({ error: 'Valid date parameter required (YYYY-MM-DD)' });
@@ -32,19 +32,45 @@ async function attendanceRoutes(fastify, opts) {
     const where = { orgId, date: dateObj };
     if (shift && VALID_SHIFTS.includes(shift)) where.shift = shift;
 
-    // If locationId provided, get workers assigned to that location
-    let assignedWorkerIds = null;
-    if (locationId) {
-      const assignments = await prisma.workerAssignment.findMany({
-        where: { locationId, orgId },
+    // Determine which workers to show
+    let rosterWorkerIds = null;
+
+    if (rosterId) {
+      // Get workers from specific roster
+      const rosterWorkers = await prisma.dutyRosterWorker.findMany({
+        where: { rosterId, roster: { orgId } },
         select: { workerId: true }
       });
-      assignedWorkerIds = assignments.map(a => a.workerId);
-
-      // Also filter attendance to only these workers
-      if (assignedWorkerIds.length > 0) {
-        where.workerId = { in: assignedWorkerIds };
+      rosterWorkerIds = rosterWorkers.map(rw => rw.workerId);
+    } else if (locationId && shift) {
+      // Get workers from duty roster(s) for this location/date/shift
+      const rosters = await prisma.dutyRoster.findMany({
+        where: { orgId, date: dateObj, shift, locationId },
+        select: { id: true }
+      });
+      if (rosters.length > 0) {
+        const rosterWorkers = await prisma.dutyRosterWorker.findMany({
+          where: { rosterId: { in: rosters.map(r => r.id) } },
+          select: { workerId: true }
+        });
+        rosterWorkerIds = rosterWorkers.map(rw => rw.workerId);
+      } else {
+        // Location selected but no rosters — empty result
+        rosterWorkerIds = [];
       }
+    }
+
+    // If roster/location was requested but resolved to zero workers, return empty
+    if (rosterWorkerIds !== null && rosterWorkerIds.length === 0) {
+      return {
+        records: [],
+        summary: { present: 0, absent: 0, leave: 0, halfDay: 0, unmarked: 0, total: 0 }
+      };
+    }
+
+    // Filter attendance by roster workers if available
+    if (rosterWorkerIds && rosterWorkerIds.length > 0) {
+      where.workerId = { in: rosterWorkerIds };
     }
 
     // Get existing attendance records
@@ -57,16 +83,16 @@ async function attendanceRoutes(fastify, opts) {
       orderBy: { worker: { name: 'asc' } }
     });
 
-    // Get all workers that should appear (assigned to location or all active workers)
+    // Get all workers that should appear
     let allWorkers;
-    if (assignedWorkerIds && assignedWorkerIds.length > 0) {
+    if (rosterWorkerIds && rosterWorkerIds.length > 0) {
       allWorkers = await prisma.worker.findMany({
-        where: { id: { in: assignedWorkerIds }, orgId, isActive: true },
+        where: { id: { in: rosterWorkerIds }, orgId, isActive: true },
         select: { id: true, name: true, employeeId: true, isActive: true },
         orderBy: { name: 'asc' }
       });
-    } else if (!locationId) {
-      // No location filter — get all active workers
+    } else if (!locationId && !rosterId) {
+      // No filter — all active workers
       allWorkers = await prisma.worker.findMany({
         where: { orgId, isActive: true },
         select: { id: true, name: true, employeeId: true, isActive: true },
@@ -284,13 +310,20 @@ async function attendanceRoutes(fastify, opts) {
     let workerIdFilter = null;
     if (workerId) workerIdFilter = [workerId];
     if (locationId) {
-      const assignments = await prisma.workerAssignment.findMany({
-        where: { locationId, orgId },
-        select: { workerId: true }
+      // Get workers from all duty rosters for this location in the date range
+      const rosters = await prisma.dutyRoster.findMany({
+        where: { orgId, locationId, date: { gte: fromDate, lte: toDate }, ...(shift ? { shift } : {}) },
+        select: { id: true }
       });
-      const locationWorkerIds = assignments.map(a => a.workerId);
+      const rosterWorkers = rosters.length > 0
+        ? await prisma.dutyRosterWorker.findMany({
+            where: { rosterId: { in: rosters.map(r => r.id) } },
+            select: { workerId: true },
+            distinct: ['workerId']
+          })
+        : [];
+      const locationWorkerIds = rosterWorkers.map(rw => rw.workerId);
       if (workerIdFilter) {
-        // Both filters: intersect
         const set = new Set(locationWorkerIds);
         workerIdFilter = workerIdFilter.filter(id => set.has(id));
       } else {
@@ -376,8 +409,18 @@ async function attendanceRoutes(fastify, opts) {
     let workerIdFilter = null;
     if (workerId) workerIdFilter = [workerId];
     if (locationId) {
-      const asgn = await prisma.workerAssignment.findMany({ where: { locationId, orgId }, select: { workerId: true } });
-      const locIds = asgn.map(a => a.workerId);
+      const rosters = await prisma.dutyRoster.findMany({
+        where: { orgId, locationId, date: { gte: fromDate, lte: toDate }, ...(shift ? { shift } : {}) },
+        select: { id: true }
+      });
+      const rw = rosters.length > 0
+        ? await prisma.dutyRosterWorker.findMany({
+            where: { rosterId: { in: rosters.map(r => r.id) } },
+            select: { workerId: true },
+            distinct: ['workerId']
+          })
+        : [];
+      const locIds = rw.map(r => r.workerId);
       if (workerIdFilter) {
         const set = new Set(locIds);
         workerIdFilter = workerIdFilter.filter(id => set.has(id));
@@ -612,39 +655,47 @@ async function attendanceRoutes(fastify, opts) {
     return stats;
   });
 
-  // ── Floors with assigned workers (for supervisor dropdown) ──
+  // ── Floors with rostered workers (for attendance dropdowns) ──
   fastify.get('/attendance/floors', async (request) => {
     const orgId = request.user.orgId;
+    const { date, shift } = request.query;
 
-    // Get all location IDs that have worker assignments
-    const assignments = await prisma.workerAssignment.findMany({
-      where: { orgId },
-      select: { locationId: true },
-      distinct: ['locationId']
-    });
+    const where = { orgId };
+    // If date provided, show rosters for that date; otherwise show recent
+    if (date && isValidDateStr(date)) {
+      where.date = new Date(date + 'T00:00:00Z');
+    }
+    if (shift && VALID_SHIFTS.includes(shift)) {
+      where.shift = shift;
+    }
+    // Supervisors only see their own rosters
+    if (request.user.role === 'SUPERVISOR') {
+      where.supervisorId = request.user.id;
+    }
 
-    const locationIds = assignments.map(a => a.locationId);
-    if (locationIds.length === 0) return { floors: [] };
-
-    const locations = await prisma.location.findMany({
-      where: { id: { in: locationIds }, orgId, isActive: true },
+    const rosters = await prisma.dutyRoster.findMany({
+      where,
       select: {
         id: true,
-        name: true,
-        type: true,
-        parent: { select: { name: true } },
-        _count: { select: { workerAssignments: true } }
+        locationId: true,
+        location: {
+          select: { id: true, name: true, type: true, parent: { select: { name: true } } }
+        },
+        supervisor: { select: { name: true } },
+        _count: { select: { workers: true } }
       },
-      orderBy: [{ parent: { name: 'asc' } }, { name: 'asc' }]
+      orderBy: [{ location: { parent: { name: 'asc' } } }, { location: { name: 'asc' } }]
     });
 
     return {
-      floors: locations.map(l => ({
-        id: l.id,
-        name: l.name,
-        type: l.type,
-        parentName: l.parent?.name || null,
-        workerCount: l._count.workerAssignments
+      floors: rosters.map(r => ({
+        id: r.location.id,
+        rosterId: r.id,
+        name: r.location.name,
+        type: r.location.type,
+        parentName: r.location.parent?.name || null,
+        supervisorName: r.supervisor.name,
+        workerCount: r._count.workers
       }))
     };
   });
