@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="manifest" href="/site.webmanifest">
+<meta name="theme-color" content="#1a7f64">
+<title>Attendance — Kodspot</title>
+<link rel="stylesheet" href="/css/design-system.css?v=7">
+<style>
+/* ── Today's Overview ── */
+.att-overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:.65rem;margin-bottom:1.25rem}
+.att-kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:.85rem 1rem;text-align:center;position:relative;overflow:hidden;box-shadow:var(--shadow-sm)}
+.att-kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:var(--radius-lg) var(--radius-lg) 0 0}
+.att-kpi.kpi-present::before{background:#10b981}
+.att-kpi.kpi-absent::before{background:#ef4444}
+.att-kpi.kpi-leave::before{background:#f59e0b}
+.att-kpi.kpi-half::before{background:#3b82f6}
+.att-kpi.kpi-unmarked::before{background:#94a3b8}
+.att-kpi.kpi-total::before{background:linear-gradient(90deg,#0ea5a4,#14b8a6)}
+.att-kpi-val{font-size:1.6rem;font-weight:700;line-height:1.2;color:var(--text)}
+.att-kpi-lbl{font-size:.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-top:.1rem}
+.att-kpi.kpi-present .att-kpi-val{color:#10b981}
+.att-kpi.kpi-absent .att-kpi-val{color:#ef4444}
+
+/* ── Section card ── */
+.att-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.15rem;margin-bottom:1rem;box-shadow:var(--shadow-sm)}
+.att-section-title{font-size:.95rem;font-weight:600;color:var(--text);margin-bottom:.75rem;display:flex;align-items:center;gap:.5rem}
+
+/* ── Filter row ── */
+.att-filters{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.75rem}
+.att-filters select,.att-filters input{font-size:.82rem;height:36px;padding:0 .6rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)}
+.att-filters input[type=date]{min-width:130px}
+.att-filters select{min-width:120px}
+
+/* ── Tabs ── */
+.att-tabs{display:flex;gap:.25rem;margin-bottom:.85rem;background:var(--surface);border-radius:var(--radius);padding:.2rem;border:1px solid var(--border)}
+.att-tab{flex:1;text-align:center;padding:.5rem .35rem;font-size:.82rem;font-weight:600;border-radius:var(--radius-sm);cursor:pointer;color:var(--text-muted);transition:all .15s;border:none;background:none;min-height:var(--touch-min)}
+.att-tab.active{background:var(--primary);color:#fff}
+
+/* ── Worker attendance table ── */
+.att-tbl{width:100%;border-collapse:collapse;font-size:.82rem}
+.att-tbl th{text-align:left;padding:.5rem .6rem;color:var(--text-muted);border-bottom:2px solid var(--border);font-weight:600;font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;position:sticky;top:0;background:var(--surface);z-index:1}
+.att-tbl td{padding:.5rem .6rem;border-bottom:1px solid var(--border-light);vertical-align:middle}
+.att-tbl tr:hover td{background:rgba(14,165,164,.04)}
+
+/* Status badges */
+.att-status{font-size:.68rem;font-weight:700;padding:.15rem .45rem;border-radius:var(--radius-sm);display:inline-block;text-transform:uppercase;letter-spacing:.03em}
+.att-status.present{background:rgba(16,185,129,.12);color:#10b981}
+.att-status.absent{background:rgba(239,68,68,.12);color:#ef4444}
+.att-status.leave{background:rgba(245,158,11,.12);color:#f59e0b}
+.att-status.half-day{background:rgba(59,130,246,.12);color:#3b82f6}
+.att-status.unmarked{background:var(--bg);color:var(--text-muted)}
+
+/* ── Report table ── */
+.report-tbl{width:100%;border-collapse:collapse;font-size:.82rem}
+.report-tbl th{text-align:left;padding:.5rem .6rem;color:var(--text-muted);border-bottom:2px solid var(--border);font-weight:600;font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;position:sticky;top:0;background:var(--surface);z-index:1}
+.report-tbl td{padding:.5rem .6rem;border-bottom:1px solid var(--border-light);vertical-align:middle}
+.report-tbl tr:hover td{background:rgba(14,165,164,.04)}
+
+/* Progress bar for attendance % */
+.att-pct-bar{height:18px;background:var(--bg);border-radius:5px;overflow:hidden;min-width:80px}
+.att-pct-fill{height:100%;border-radius:5px;transition:width .4s ease;display:flex;align-items:center;padding:0 .4rem}
+.att-pct-fill.good{background:linear-gradient(90deg,#10b981,#34d399)}
+.att-pct-fill.ok{background:linear-gradient(90deg,#f59e0b,#fbbf24)}
+.att-pct-fill.bad{background:linear-gradient(90deg,#ef4444,#f87171)}
+.att-pct-label{font-size:.62rem;font-weight:700;color:#fff;white-space:nowrap}
+
+/* Empty / scroll */
+.att-empty{text-align:center;padding:2rem 1rem;color:var(--text-muted);font-size:.85rem}
+.att-scroll{max-height:420px;overflow-y:auto;overscroll-behavior:contain}
+
+/* Mark attendance section (admin can also mark) */
+.att-mark-row{display:flex;gap:.3rem;align-items:center}
+.att-mark-select{font-size:.75rem;padding:.2rem .35rem;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);height:28px}
+
+@media(max-width:768px){
+  .att-overview{grid-template-columns:repeat(3,1fr)}
+  .att-filters{gap:.35rem}
+}
+@media(max-width:480px){
+  .att-overview{grid-template-columns:repeat(2,1fr);gap:.4rem}
+  .att-kpi{padding:.6rem .7rem}
+  .att-kpi-val{font-size:1.2rem}
+  .att-tbl,.report-tbl{font-size:.78rem}
+}
+</style>
+</head>
+<body>
+<div class="sa-banner" id="sa-banner" style="display:none"></div>
+<nav class="topbar">
+  <div class="topbar-left">
+    <span class="topbar-brand">Kodspot</span>
+    <button class="nav-toggle" id="nav-toggle" aria-label="Menu">☰</button>
+    <div class="topbar-nav" id="topbar-nav"></div>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-user" id="userName"></span>
+    <button class="btn btn-sm btn-ghost" onclick="App.logout()">Logout</button>
+  </div>
+</nav>
+
+<main class="main-content" style="padding:1.25rem;max-width:1100px;margin:0 auto">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.85rem;flex-wrap:wrap;gap:.5rem">
+    <h1 style="font-size:1.25rem;font-weight:700;margin:0">Attendance</h1>
+  </div>
+
+  <!-- Today KPIs -->
+  <div class="att-overview" id="overviewCards">
+    <div class="att-kpi kpi-total"><div class="att-kpi-val" id="kpiTotal">–</div><div class="att-kpi-lbl">Total Workers</div></div>
+    <div class="att-kpi kpi-present"><div class="att-kpi-val" id="kpiPresent">–</div><div class="att-kpi-lbl">Present</div></div>
+    <div class="att-kpi kpi-absent"><div class="att-kpi-val" id="kpiAbsent">–</div><div class="att-kpi-lbl">Absent</div></div>
+    <div class="att-kpi kpi-leave"><div class="att-kpi-val" id="kpiLeave">–</div><div class="att-kpi-lbl">Leave</div></div>
+    <div class="att-kpi kpi-half"><div class="att-kpi-val" id="kpiHalf">–</div><div class="att-kpi-lbl">Half Day</div></div>
+    <div class="att-kpi kpi-unmarked"><div class="att-kpi-val" id="kpiUnmarked">–</div><div class="att-kpi-lbl">Unmarked</div></div>
+  </div>
+
+  <!-- Tabs: Daily View / Report -->
+  <div class="att-tabs">
+    <button class="att-tab active" onclick="switchTab('daily')">Daily View</button>
+    <button class="att-tab" onclick="switchTab('report')">Report</button>
+  </div>
+
+  <!-- Daily View -->
+  <div id="dailyTab">
+    <div class="att-section">
+      <div class="att-section-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Daily Attendance
+      </div>
+
+      <div class="att-filters">
+        <select id="dailyFloor" onchange="loadDaily()"><option value="">All Floors</option></select>
+        <input type="date" id="dailyDate" onchange="loadDaily()">
+        <select id="dailyShift" onchange="loadDaily()"><option value="">Loading…</option></select>
+      </div>
+
+      <div class="att-scroll" id="dailyScroll">
+        <table class="att-tbl">
+          <thead><tr><th>Worker</th><th>ID</th><th>Status</th><th>Marked By</th><th>Time</th></tr></thead>
+          <tbody id="dailyBody"></tbody>
+        </table>
+      </div>
+      <div class="att-empty" id="dailyEmpty" style="display:none">No attendance records found</div>
+    </div>
+  </div>
+
+  <!-- Report Tab -->
+  <div id="reportTab" style="display:none">
+    <div class="att-section">
+      <div class="att-section-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Attendance Report
+      </div>
+
+      <div class="att-filters">
+        <input type="date" id="reportFrom">
+        <span style="font-size:.82rem;color:var(--text-muted);align-self:center">to</span>
+        <input type="date" id="reportTo">
+        <select id="reportFloor" onchange="loadReport()"><option value="">All Floors</option></select>
+        <select id="reportShift" onchange="loadReport()">
+          <option value="">All Shifts</option>
+          <option value="MORNING">Morning</option>
+          <option value="AFTERNOON">Afternoon</option>
+          <option value="NIGHT">Night</option>
+          <option value="GENERAL">General</option>
+        </select>
+        <button class="btn btn-sm btn-primary" onclick="loadReport()">Generate</button>
+      </div>
+
+      <div id="reportSummary" style="display:none;margin-bottom:.75rem">
+        <div style="display:flex;gap:1rem;flex-wrap:wrap;font-size:.78rem;color:var(--text-muted);padding:.5rem 0;border-bottom:1px solid var(--border-light);margin-bottom:.5rem">
+          <span>Total Records: <b id="rptTotal" style="color:var(--text)">0</b></span>
+          <span>Present: <b id="rptPresent" style="color:#10b981">0</b></span>
+          <span>Absent: <b id="rptAbsent" style="color:#ef4444">0</b></span>
+          <span>Leave: <b id="rptLeave" style="color:#f59e0b">0</b></span>
+          <span>Half Day: <b id="rptHalf" style="color:#3b82f6">0</b></span>
+          <span>Avg: <b id="rptAvg" style="color:var(--primary)">0%</b></span>
+        </div>
+      </div>
+
+      <div class="att-scroll" id="reportScroll">
+        <table class="report-tbl">
+          <thead><tr><th>Worker</th><th>ID</th><th>Present</th><th>Absent</th><th>Leave</th><th>Half</th><th>Attendance %</th></tr></thead>
+          <tbody id="reportBody"></tbody>
+        </table>
+      </div>
+      <div class="att-empty" id="reportEmpty" style="display:none">Select a date range and click Generate</div>
+    </div>
+  </div>
+</main>
+
+<script src="/js/app.js?v=8"></script>
+<script>
+if (!App.initAdmin('admin-attendance')) throw '';
+var esc = App.esc, $ = App.$;
+var activeTab = 'daily';
+
+// ── Init ──
+(async function init() {
+  await Promise.all([loadTodayStats(), loadFloors(), loadShifts()]);
+  setDefaults();
+  await loadDaily();
+})();
+
+function setDefaults() {
+  var d = new Date();
+  var iso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  $('dailyDate').value = iso;
+
+  // Report defaults: last 7 days
+  var from = new Date(d);
+  from.setDate(from.getDate() - 6);
+  $('reportFrom').value = from.getFullYear() + '-' + String(from.getMonth() + 1).padStart(2, '0') + '-' + String(from.getDate()).padStart(2, '0');
+  $('reportTo').value = iso;
+}
+
+// ── Today's Overview ──
+async function loadTodayStats() {
+  var res = await App.apiFetch('/attendance/today');
+  if (!res) return;
+  var s = await res.json();
+  $('kpiTotal').textContent = s.totalWorkers || 0;
+  $('kpiPresent').textContent = s.present || 0;
+  $('kpiAbsent').textContent = s.absent || 0;
+  $('kpiLeave').textContent = s.leave || 0;
+  $('kpiHalf').textContent = s.halfDay || 0;
+  $('kpiUnmarked').textContent = s.unmarked || 0;
+}
+
+// ── Floors dropdown ──
+async function loadFloors() {
+  var res = await App.apiFetch('/attendance/floors');
+  if (!res) return;
+  var data = await res.json();
+  var floors = data.floors || [];
+  var opts = '<option value="">All Floors</option>';
+  for (var i = 0; i < floors.length; i++) {
+    var f = floors[i];
+    var label = f.parentName ? f.parentName + ' → ' + f.name : f.name;
+    opts += '<option value="' + esc(f.id) + '">' + esc(label) + ' (' + f.workerCount + ')</option>';
+  }
+  $('dailyFloor').innerHTML = opts;
+  $('reportFloor').innerHTML = opts;
+}
+
+// ── Shifts dropdown ──
+async function loadShifts() {
+  var res = await App.apiFetch('/shift-config');
+  if (!res) return;
+  var configs = await res.json();
+  var html = '';
+  var now = new Date();
+  var curMin = now.getHours() * 60 + now.getMinutes();
+  var detected = '';
+
+  for (var i = 0; i < configs.length; i++) {
+    var s = configs[i];
+    var startMin = s.startHour * 60 + s.startMin;
+    var endMin = s.endHour * 60 + s.endMin;
+    var label = s.shift.charAt(0) + s.shift.slice(1).toLowerCase();
+    var startH = s.startHour % 12 || 12;
+    var endH = s.endHour % 12 || 12;
+    label += ' (' + startH + ':' + String(s.startMin).padStart(2, '0') + (s.startHour < 12 ? ' AM' : ' PM') + ' – ' + endH + ':' + String(s.endMin).padStart(2, '0') + (s.endHour < 12 ? ' AM' : ' PM') + ')';
+    html += '<option value="' + s.shift + '">' + label + '</option>';
+
+    if (endMin > startMin) { if (curMin >= startMin && curMin < endMin) detected = s.shift; }
+    else { if (curMin >= startMin || curMin < endMin) detected = s.shift; }
+  }
+
+  $('dailyShift').innerHTML = html;
+  if (detected) $('dailyShift').value = detected;
+}
+
+// ── Tab switching ──
+function switchTab(tab) {
+  activeTab = tab;
+  var tabs = document.querySelectorAll('.att-tab');
+  tabs[0].classList.toggle('active', tab === 'daily');
+  tabs[1].classList.toggle('active', tab === 'report');
+  $('dailyTab').style.display = tab === 'daily' ? 'block' : 'none';
+  $('reportTab').style.display = tab === 'report' ? 'block' : 'none';
+}
+
+// ── Daily View ──
+async function loadDaily() {
+  var date = $('dailyDate').value;
+  var shift = $('dailyShift').value;
+  var locationId = $('dailyFloor').value;
+
+  if (!date || !shift) return;
+
+  $('dailyBody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:1.5rem"><div class="skeleton skeleton-text" style="width:60%;margin:0 auto"></div></td></tr>';
+  $('dailyEmpty').style.display = 'none';
+
+  var url = '/attendance?date=' + encodeURIComponent(date) + '&shift=' + encodeURIComponent(shift);
+  if (locationId) url += '&locationId=' + encodeURIComponent(locationId);
+
+  var res = await App.apiFetch(url);
+  if (!res) return;
+  var data = await res.json();
+  var records = data.records || [];
+
+  if (!records.length) {
+    $('dailyBody').innerHTML = '';
+    $('dailyEmpty').style.display = 'block';
+    return;
+  }
+
+  $('dailyEmpty').style.display = 'none';
+  var html = '';
+  for (var i = 0; i < records.length; i++) {
+    var r = records[i];
+    var statusCls = r.status ? r.status.toLowerCase().replace('_', '-') : 'unmarked';
+    var statusTxt = r.status ? r.status.replace('_', ' ') : 'UNMARKED';
+    var markedBy = r.markedBy ? esc(r.markedBy.name) : '—';
+    var time = r.createdAt ? new Date(r.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
+
+    html += '<tr>';
+    html += '<td style="font-weight:600">' + esc(r.worker.name) + '</td>';
+    html += '<td style="font-size:.75rem;color:var(--text-muted)">' + esc(r.worker.employeeId || '—') + '</td>';
+    html += '<td><span class="att-status ' + statusCls + '">' + statusTxt + '</span></td>';
+    html += '<td style="font-size:.75rem">' + markedBy + '</td>';
+    html += '<td style="font-size:.75rem;color:var(--text-muted)">' + time + '</td>';
+    html += '</tr>';
+  }
+  $('dailyBody').innerHTML = html;
+}
+
+// ── Report ──
+async function loadReport() {
+  var from = $('reportFrom').value;
+  var to = $('reportTo').value;
+  if (!from || !to) {
+    App.toast('Select both from and to dates', 'error');
+    return;
+  }
+
+  $('reportBody').innerHTML = '<tr><td colspan="7" style="text-align:center;padding:1.5rem"><div class="skeleton skeleton-text" style="width:60%;margin:0 auto"></div></td></tr>';
+  $('reportEmpty').style.display = 'none';
+  $('reportSummary').style.display = 'none';
+
+  var url = '/attendance/report?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to);
+  var locationId = $('reportFloor').value;
+  var shift = $('reportShift').value;
+  if (locationId) url += '&locationId=' + encodeURIComponent(locationId);
+  if (shift) url += '&shift=' + encodeURIComponent(shift);
+
+  var res = await App.apiFetch(url);
+  if (!res) return;
+  var data = await res.json();
+
+  if (data.error) {
+    App.toast(data.error, 'error');
+    $('reportBody').innerHTML = '';
+    return;
+  }
+
+  var workers = data.workers || [];
+  var summary = data.summary || {};
+
+  if (!workers.length) {
+    $('reportBody').innerHTML = '';
+    $('reportEmpty').style.display = 'block';
+    $('reportEmpty').textContent = 'No attendance records for this period';
+    return;
+  }
+
+  // Summary row
+  $('reportSummary').style.display = 'block';
+  $('rptTotal').textContent = summary.totalRecords || 0;
+  $('rptPresent').textContent = summary.present || 0;
+  $('rptAbsent').textContent = summary.absent || 0;
+  $('rptLeave').textContent = summary.leave || 0;
+  $('rptHalf').textContent = summary.halfDay || 0;
+  $('rptAvg').textContent = (summary.attendancePercent || 0) + '%';
+
+  var html = '';
+  for (var i = 0; i < workers.length; i++) {
+    var w = workers[i];
+    var pct = w.attendancePercent || 0;
+    var pctCls = pct >= 80 ? 'good' : pct >= 50 ? 'ok' : 'bad';
+
+    html += '<tr>';
+    html += '<td style="font-weight:600">' + esc(w.worker.name) + '</td>';
+    html += '<td style="font-size:.75rem;color:var(--text-muted)">' + esc(w.worker.employeeId || '—') + '</td>';
+    html += '<td style="color:#10b981;font-weight:600">' + w.present + '</td>';
+    html += '<td style="color:#ef4444;font-weight:600">' + w.absent + '</td>';
+    html += '<td style="color:#f59e0b;font-weight:600">' + w.leave + '</td>';
+    html += '<td style="color:#3b82f6;font-weight:600">' + w.halfDay + '</td>';
+    html += '<td><div class="att-pct-bar"><div class="att-pct-fill ' + pctCls + '" style="width:' + Math.max(pct, 8) + '%"><span class="att-pct-label">' + pct + '%</span></div></div></td>';
+    html += '</tr>';
+  }
+  $('reportBody').innerHTML = html;
+}
+</script>
+</body>
+</html>

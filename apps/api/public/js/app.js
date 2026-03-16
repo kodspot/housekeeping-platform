@@ -246,6 +246,7 @@ window.App = (function () {
     { page: 'admin-supervisors', label: 'Supervisors' },
     { page: 'admin-cleaning', label: 'Cleaning' },
     { page: 'admin-tickets', label: 'Tickets' },
+    { page: 'admin-attendance', label: 'Attendance' },
     { page: 'admin-audit-logs', label: 'Audit Logs' }
   ];
 

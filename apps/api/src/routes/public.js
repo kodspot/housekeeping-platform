@@ -4,7 +4,7 @@ const { z } = require('zod');
 const { prisma } = require('../lib/prisma');
 const { uploadToR2 } = require('../lib/r2');
 const { validateImageBuffer } = require('../errors');
-const { notifyAdmins, notifySupervisors } = require('./notifications');
+const { notifyAdmins, notifySupervisors, createNotification } = require('./notifications');
 
 const ISSUE_TYPES = ['NOT_CLEAN', 'BAD_SMELL', 'BROKEN_EQUIPMENT', 'WATER_ISSUE', 'PEST', 'LINEN', 'WASTE', 'OTHER'];
 
@@ -218,6 +218,216 @@ async function publicRoutes(fastify, opts) {
         createdAt: ticket.createdAt
       }
     };
+  });
+
+  // ── Public: Get review page data (no auth required) ──
+  fastify.get('/public/review/:token', {
+    config: {
+      rateLimit: {
+        max: 10,
+        timeWindow: 900000,
+        keyGenerator: (req) => req.ip
+      }
+    }
+  }, async (request, reply) => {
+    const { token } = request.params;
+    if (!token || token.length !== 64) {
+      return reply.code(404).send({ error: 'Invalid review link' });
+    }
+
+    const ticket = await prisma.ticket.findUnique({
+      where: { reviewToken: token },
+      select: {
+        id: true,
+        title: true,
+        issueType: true,
+        status: true,
+        source: true,
+        resolvedImageUrl: true,
+        resolvedNote: true,
+        resolvedAt: true,
+        reviewStatus: true,
+        reviewExpiresAt: true,
+        reviewedAt: true,
+        createdAt: true,
+        location: { select: { name: true, type: true } },
+        org: { select: { name: true } }
+      }
+    });
+
+    if (!ticket) {
+      return reply.code(404).send({ error: 'Invalid review link' });
+    }
+
+    // Already reviewed
+    if (ticket.reviewStatus !== 'PENDING') {
+      return {
+        status: 'already_reviewed',
+        reviewStatus: ticket.reviewStatus,
+        reviewedAt: ticket.reviewedAt
+      };
+    }
+
+    // Expired
+    if (ticket.reviewExpiresAt && new Date() > ticket.reviewExpiresAt) {
+      // Auto-close
+      await prisma.ticket.update({
+        where: { reviewToken: token },
+        data: { reviewStatus: 'CONFIRMED', status: 'CLOSED', reviewedAt: new Date() }
+      });
+      return {
+        status: 'expired',
+        message: 'This review link has expired. The resolution has been automatically accepted.'
+      };
+    }
+
+    return {
+      status: 'pending',
+      ticket: {
+        title: ticket.title,
+        issueType: ticket.issueType,
+        resolvedImageUrl: ticket.resolvedImageUrl,
+        resolvedNote: ticket.resolvedNote,
+        resolvedAt: ticket.resolvedAt,
+        createdAt: ticket.createdAt,
+        locationName: ticket.location.name,
+        locationType: ticket.location.type,
+        orgName: ticket.org.name
+      },
+      expiresAt: ticket.reviewExpiresAt
+    };
+  });
+
+  // ── Public: Submit review (confirm/reject resolution) ──
+  fastify.post('/public/review/:token', {
+    config: {
+      rateLimit: {
+        max: 5,
+        timeWindow: 900000,
+        keyGenerator: (req) => req.ip
+      }
+    }
+  }, async (request, reply) => {
+    const { token } = request.params;
+    if (!token || token.length !== 64) {
+      return reply.code(404).send({ error: 'Invalid review link' });
+    }
+
+    const schema = z.object({
+      action: z.enum(['CONFIRM', 'REJECT']),
+      note: z.string().max(500).optional()
+    });
+
+    let data;
+    try {
+      data = schema.parse(request.body);
+    } catch {
+      return reply.code(400).send({ error: 'Invalid request. action must be CONFIRM or REJECT.' });
+    }
+
+    const ticket = await prisma.ticket.findUnique({
+      where: { reviewToken: token },
+      select: {
+        id: true,
+        orgId: true,
+        title: true,
+        status: true,
+        reviewStatus: true,
+        reviewExpiresAt: true,
+        assignedToId: true,
+        location: { select: { name: true } }
+      }
+    });
+
+    if (!ticket) {
+      return reply.code(404).send({ error: 'Invalid review link' });
+    }
+
+    // Already reviewed
+    if (ticket.reviewStatus !== 'PENDING') {
+      return reply.code(400).send({ error: 'This resolution has already been reviewed.' });
+    }
+
+    // Expired
+    if (ticket.reviewExpiresAt && new Date() > ticket.reviewExpiresAt) {
+      await prisma.ticket.update({
+        where: { reviewToken: token },
+        data: { reviewStatus: 'CONFIRMED', status: 'CLOSED', reviewedAt: new Date() }
+      });
+      return reply.code(400).send({ error: 'This review link has expired. The resolution has been automatically accepted.' });
+    }
+
+    const now = new Date();
+
+    if (data.action === 'CONFIRM') {
+      await prisma.ticket.update({
+        where: { reviewToken: token },
+        data: {
+          reviewStatus: 'CONFIRMED',
+          reviewNote: data.note?.trim() || null,
+          reviewedAt: now,
+          status: 'CLOSED'
+        }
+      });
+
+      await prisma.auditLog.create({
+        data: {
+          orgId: ticket.orgId,
+          actorType: 'guest',
+          action: 'ticket_review_confirmed',
+          entityType: 'Ticket',
+          entityId: ticket.id,
+          newValue: { reviewStatus: 'CONFIRMED' }
+        }
+      });
+
+      return { success: true, message: 'Thank you for confirming the resolution!' };
+    }
+
+    // REJECT: reopen ticket, clear assignee so it goes back to pool
+    await prisma.ticket.update({
+      where: { reviewToken: token },
+      data: {
+        reviewStatus: 'REJECTED',
+        reviewNote: data.note?.trim() || null,
+        reviewedAt: now,
+        status: 'OPEN',
+        assignedToId: null
+      }
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        orgId: ticket.orgId,
+        actorType: 'guest',
+        action: 'ticket_review_rejected',
+        entityType: 'Ticket',
+        entityId: ticket.id,
+        newValue: { reviewStatus: 'REJECTED', reviewNote: data.note || null }
+      }
+    });
+
+    // Notify admins about rejection
+    notifyAdmins(ticket.orgId, {
+      type: 'ticket_review_rejected',
+      title: 'Resolution rejected by guest',
+      body: ticket.title + (ticket.location ? ' — ' + ticket.location.name : ''),
+      entityId: ticket.id
+    }).catch(() => {});
+
+    // Notify the supervisor who resolved it
+    if (ticket.assignedToId) {
+      createNotification({
+        orgId: ticket.orgId,
+        userId: ticket.assignedToId,
+        type: 'ticket_review_rejected',
+        title: 'Guest rejected your resolution',
+        body: ticket.title + (ticket.location ? ' — ' + ticket.location.name : ''),
+        entityId: ticket.id
+      }).catch(() => {});
+    }
+
+    return { success: true, message: 'Your feedback has been recorded. The issue will be re-opened for further attention.' };
   });
 }
 

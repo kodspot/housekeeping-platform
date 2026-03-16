@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="manifest" href="/site.webmanifest">
+<meta name="theme-color" content="#1a7f64">
+<title>Attendance — Kodspot</title>
+<link rel="stylesheet" href="/css/design-system.css?v=7">
+<style>
+.sv-shell{max-width:640px;margin:0 auto;padding:1rem .75rem;min-height:calc(100dvh - 56px)}
+
+/* Filter bar */
+.att-filters{display:flex;gap:.4rem;margin-bottom:.85rem;flex-wrap:wrap}
+.att-filters select,.att-filters input[type=date]{flex:1;min-width:0;font-size:.82rem;padding:.5rem .6rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);min-height:var(--touch-min)}
+
+/* Summary stats */
+.att-stats{display:flex;gap:.35rem;margin-bottom:.85rem;flex-wrap:wrap}
+.att-stat{flex:1;text-align:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.5rem .25rem;min-width:55px}
+.att-stat-val{font-size:1.15rem;font-weight:700;line-height:1}
+.att-stat-lbl{font-size:.58rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-top:.1rem}
+.att-stat.present .att-stat-val{color:var(--success)}
+.att-stat.absent .att-stat-val{color:#ef4444}
+.att-stat.leave .att-stat-val{color:#f59e0b}
+.att-stat.half .att-stat-val{color:#3b82f6}
+.att-stat.unmarked .att-stat-val{color:var(--text-muted)}
+
+/* Quick action buttons */
+.att-quick{display:flex;gap:.35rem;margin-bottom:.75rem}
+.att-quick-btn{flex:1;font-size:.72rem;font-weight:600;padding:.45rem .3rem;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface);color:var(--text-muted);cursor:pointer;text-align:center;transition:all .15s;min-height:var(--touch-min)}
+.att-quick-btn:hover{border-color:var(--primary);color:var(--text)}
+.att-quick-btn.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+
+/* Worker attendance list */
+.att-list{display:flex;flex-direction:column;gap:.4rem}
+.att-worker{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:.7rem .8rem;transition:border-color .15s}
+.att-worker.marked{border-color:rgba(16,185,129,.3)}
+.att-worker-top{display:flex;align-items:center;gap:.55rem;margin-bottom:.5rem}
+.att-worker-avatar{width:34px;height:34px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;flex-shrink:0}
+.att-worker-info{flex:1;min-width:0}
+.att-worker-name{font-size:.88rem;font-weight:600;color:var(--text);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.att-worker-id{font-size:.68rem;color:var(--text-muted)}
+.att-worker-saved{font-size:.62rem;color:var(--success);display:none}
+.att-worker.marked .att-worker-saved{display:inline}
+
+/* Radio row */
+.att-options{display:flex;gap:.3rem}
+.att-opt{flex:1}
+.att-opt input{display:none}
+.att-opt label{display:block;text-align:center;font-size:.68rem;font-weight:600;padding:.4rem .15rem;border-radius:var(--radius-sm);border:1.5px solid var(--border);cursor:pointer;transition:all .15s;color:var(--text-muted);min-height:var(--touch-min);display:flex;align-items:center;justify-content:center}
+.att-opt input:checked + label{color:#fff}
+.att-opt.present input:checked + label{background:#10b981;border-color:#10b981}
+.att-opt.absent input:checked + label{background:#ef4444;border-color:#ef4444}
+.att-opt.leave input:checked + label{background:#f59e0b;border-color:#f59e0b}
+.att-opt.half input:checked + label{background:#3b82f6;border-color:#3b82f6}
+
+/* Submit bar */
+.att-submit-bar{position:sticky;bottom:0;background:var(--bg);padding:.75rem 0 .35rem;z-index:5;display:flex;gap:.5rem;align-items:center}
+.att-submit-bar .btn{flex:1}
+.att-changed-count{font-size:.72rem;color:var(--text-muted);white-space:nowrap}
+
+/* Empty state */
+.att-empty{text-align:center;padding:2.5rem 1rem;color:var(--text-muted)}
+.att-empty svg{opacity:.5;margin-bottom:.5rem}
+
+/* Success */
+.att-success{display:none;text-align:center;padding:2rem 1rem}
+.att-success-check{width:64px;height:64px;border-radius:50%;background:var(--success);display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;font-size:1.8rem;color:#fff;box-shadow:0 4px 16px rgba(16,185,129,.25)}
+
+@media(max-width:480px){
+  .sv-shell{padding:.6rem .5rem}
+  .att-filters{gap:.3rem}
+  .att-filters select,.att-filters input[type=date]{font-size:.78rem;padding:.4rem .5rem}
+  .att-stats{gap:.25rem}
+  .att-stat{padding:.4rem .15rem}
+  .att-stat-val{font-size:.95rem}
+  .att-worker{padding:.6rem .65rem}
+  .att-opt label{font-size:.62rem;padding:.35rem .1rem}
+}
+</style>
+</head>
+<body>
+<nav class="topbar">
+  <div class="topbar-left">
+    <span class="topbar-brand">Kodspot</span>
+    <div class="sv-nav" id="sv-nav">
+      <a href="/supervisor-scan" class="sv-nav-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 012-2h2"/><path d="M17 3h2a2 2 0 012 2v2"/><path d="M21 17v2a2 2 0 01-2 2h-2"/><path d="M7 21H5a2 2 0 01-2-2v-2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>Scan</a>
+      <a href="/supervisor-tickets" class="sv-nav-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 5H9a2 2 0 00-2 2v10a2 2 0 002 2h6a2 2 0 002-2V7a2 2 0 00-2-2z"/><path d="M12 11h.01"/><path d="M12 15h.01"/></svg>Tickets</a>
+      <a href="/supervisor-attendance" class="sv-nav-link active"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>Attendance</a>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-user" id="userName"></span>
+    <button class="btn btn-sm btn-ghost" onclick="App.logoutSup()">Logout</button>
+  </div>
+</nav>
+
+<div class="sv-shell">
+  <!-- Main attendance view -->
+  <div id="mainView">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem">
+      <h2 style="font-size:1.05rem;font-weight:700;margin:0">Attendance</h2>
+      <div style="display:inline-flex;align-items:center;gap:.2rem;font-size:.72rem;color:var(--text-light);cursor:pointer;padding:.25rem .5rem;border-radius:var(--radius-sm)" onclick="loadAttendance()" title="Refresh"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg> Refresh</div>
+    </div>
+
+    <!-- Filters -->
+    <div class="att-filters">
+      <select id="floorSelect" onchange="loadAttendance()">
+        <option value="">All Floors</option>
+      </select>
+      <input type="date" id="dateSelect" onchange="loadAttendance()">
+      <select id="shiftSelect" onchange="loadAttendance()">
+        <option value="">Loading…</option>
+      </select>
+    </div>
+
+    <!-- Stats -->
+    <div class="att-stats" id="statsRow">
+      <div class="att-stat present"><div class="att-stat-val" id="statPresent">–</div><div class="att-stat-lbl">Present</div></div>
+      <div class="att-stat absent"><div class="att-stat-val" id="statAbsent">–</div><div class="att-stat-lbl">Absent</div></div>
+      <div class="att-stat leave"><div class="att-stat-val" id="statLeave">–</div><div class="att-stat-lbl">Leave</div></div>
+      <div class="att-stat half"><div class="att-stat-val" id="statHalf">–</div><div class="att-stat-lbl">Half Day</div></div>
+      <div class="att-stat unmarked"><div class="att-stat-val" id="statUnmarked">–</div><div class="att-stat-lbl">Unmarked</div></div>
+    </div>
+
+    <!-- Quick mark all buttons -->
+    <div class="att-quick" id="quickActions" style="display:none">
+      <button class="att-quick-btn" onclick="markAll('PRESENT')">✓ All Present</button>
+      <button class="att-quick-btn" onclick="markAll('ABSENT')">✗ All Absent</button>
+      <button class="att-quick-btn" onclick="clearAll()">↺ Clear</button>
+    </div>
+
+    <!-- Worker list -->
+    <div id="workerList"></div>
+
+    <!-- Submit bar -->
+    <div class="att-submit-bar" id="submitBar" style="display:none">
+      <span class="att-changed-count" id="changedCount">0 changes</span>
+      <button class="btn btn-primary" id="submitBtn" onclick="submitAttendance()">Save Attendance</button>
+    </div>
+  </div>
+
+  <!-- Success screen -->
+  <div class="att-success" id="successView">
+    <div class="att-success-check">✓</div>
+    <h3 style="font-size:1.1rem;font-weight:700;margin-bottom:.25rem">Attendance Saved</h3>
+    <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:1.25rem" id="successMsg">Marked for 0 workers</p>
+    <button class="btn btn-primary" onclick="resetAfterSave()" style="min-width:180px">Mark More</button>
+  </div>
+</div>
+
+<script src="/js/app.js?v=8"></script>
+<script>
+if (!App.initSupervisor()) throw '';
+App.initNotifications(App.supFetch, 'supervisor');
+var esc = App.esc, $ = App.$;
+
+var workers = [];      // current attendance data from API
+var changes = {};      // workerId -> status
+var shiftConfigs = []; // shift configs from API
+var currentShift = ''; // auto-detected or selected
+
+// ── Init ──
+(async function init() {
+  await Promise.all([loadFloors(), loadShifts()]);
+  setDefaultDate();
+  await loadAttendance();
+})();
+
+function setDefaultDate() {
+  var d = new Date();
+  var yyyy = d.getFullYear();
+  var mm = String(d.getMonth() + 1).padStart(2, '0');
+  var dd = String(d.getDate()).padStart(2, '0');
+  $('dateSelect').value = yyyy + '-' + mm + '-' + dd;
+}
+
+// ── Load floors for dropdown ──
+async function loadFloors() {
+  var res = await App.supFetch('/attendance/floors');
+  if (!res) return;
+  var data = await res.json();
+  var sel = $('floorSelect');
+  sel.innerHTML = '<option value="">All Floors</option>';
+  if (data.floors) {
+    for (var i = 0; i < data.floors.length; i++) {
+      var f = data.floors[i];
+      var label = f.parentName ? f.parentName + ' → ' + f.name : f.name;
+      sel.innerHTML += '<option value="' + esc(f.id) + '">' + esc(label) + ' (' + f.workerCount + ')</option>';
+    }
+  }
+}
+
+// ── Load shift config and auto-detect current shift ──
+async function loadShifts() {
+  var res = await App.supFetch('/shift-config');
+  if (!res) return;
+  shiftConfigs = await res.json();
+
+  var sel = $('shiftSelect');
+  sel.innerHTML = '';
+  var now = new Date();
+  var curH = now.getHours(), curM = now.getMinutes();
+  var detected = '';
+
+  for (var i = 0; i < shiftConfigs.length; i++) {
+    var s = shiftConfigs[i];
+    var label = formatShiftLabel(s);
+    sel.innerHTML += '<option value="' + s.shift + '">' + label + '</option>';
+
+    // Auto-detect: check if current time falls within shift window
+    var startMin = s.startHour * 60 + s.startMin;
+    var endMin = s.endHour * 60 + s.endMin;
+    var nowMin = curH * 60 + curM;
+
+    if (endMin > startMin) {
+      if (nowMin >= startMin && nowMin < endMin) detected = s.shift;
+    } else {
+      // Overnight shift
+      if (nowMin >= startMin || nowMin < endMin) detected = s.shift;
+    }
+  }
+
+  if (detected) {
+    sel.value = detected;
+    currentShift = detected;
+  } else if (shiftConfigs.length > 0) {
+    currentShift = shiftConfigs[0].shift;
+  }
+}
+
+function formatShiftLabel(s) {
+  var startH = s.startHour % 12 || 12;
+  var startAmPm = s.startHour < 12 ? 'AM' : 'PM';
+  var endH = s.endHour % 12 || 12;
+  var endAmPm = s.endHour < 12 ? 'AM' : 'PM';
+  var startStr = startH + ':' + String(s.startMin).padStart(2, '0') + ' ' + startAmPm;
+  var endStr = endH + ':' + String(s.endMin).padStart(2, '0') + ' ' + endAmPm;
+  return s.shift.charAt(0) + s.shift.slice(1).toLowerCase() + ' (' + startStr + ' – ' + endStr + ')';
+}
+
+// ── Load attendance data ──
+async function loadAttendance() {
+  var date = $('dateSelect').value;
+  var shift = $('shiftSelect').value;
+  var locationId = $('floorSelect').value;
+
+  if (!date || !shift) return;
+
+  App.showSkeletonCards('workerList', 4);
+  changes = {};
+  updateSubmitBar();
+
+  var url = '/attendance?date=' + encodeURIComponent(date) + '&shift=' + encodeURIComponent(shift);
+  if (locationId) url += '&locationId=' + encodeURIComponent(locationId);
+
+  var res = await App.supFetch(url);
+  if (!res) return;
+  var data = await res.json();
+
+  workers = data.records || [];
+  updateStats(data.summary || {});
+  renderWorkers();
+}
+
+function updateStats(s) {
+  $('statPresent').textContent = s.present || 0;
+  $('statAbsent').textContent = s.absent || 0;
+  $('statLeave').textContent = s.leave || 0;
+  $('statHalf').textContent = s.halfDay || 0;
+  $('statUnmarked').textContent = s.unmarked || 0;
+}
+
+// ── Render worker list ──
+function renderWorkers() {
+  var el = $('workerList');
+  if (!workers.length) {
+    el.innerHTML = '<div class="att-empty"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg><p style="margin-top:.5rem">No workers found for selected floor.<br><span style="font-size:.75rem">Workers need to be assigned to floors first.</span></p></div>';
+    $('quickActions').style.display = 'none';
+    $('submitBar').style.display = 'none';
+    return;
+  }
+
+  $('quickActions').style.display = 'flex';
+  var html = '';
+  for (var i = 0; i < workers.length; i++) {
+    var w = workers[i];
+    var wk = w.worker;
+    var initials = getInitials(wk.name);
+    var isMarked = w.status !== null;
+    var wId = wk.id;
+
+    html += '<div class="att-worker' + (isMarked ? ' marked' : '') + '" id="aw-' + wId + '">';
+    html += '<div class="att-worker-top">';
+    html += '<div class="att-worker-avatar">' + esc(initials) + '</div>';
+    html += '<div class="att-worker-info">';
+    html += '<div class="att-worker-name">' + esc(wk.name) + '</div>';
+    html += '<div class="att-worker-id">' + esc(wk.employeeId || '—') + ' <span class="att-worker-saved">· ✓ Saved</span></div>';
+    html += '</div></div>';
+    html += '<div class="att-options">';
+    html += radioOpt(wId, 'PRESENT', 'Present', 'present', w.status);
+    html += radioOpt(wId, 'ABSENT', 'Absent', 'absent', w.status);
+    html += radioOpt(wId, 'LEAVE', 'Leave', 'leave', w.status);
+    html += radioOpt(wId, 'HALF_DAY', 'Half Day', 'half', w.status);
+    html += '</div></div>';
+  }
+  el.innerHTML = html;
+  updateSubmitBar();
+}
+
+function radioOpt(workerId, value, label, cls, current) {
+  var name = 'att_' + workerId;
+  var id = name + '_' + value;
+  var checked = current === value ? ' checked' : '';
+  return '<div class="att-opt ' + cls + '">' +
+    '<input type="radio" name="' + name + '" id="' + id + '" value="' + value + '"' + checked + ' onchange="onStatusChange(\'' + workerId + '\',\'' + value + '\')">' +
+    '<label for="' + id + '">' + esc(label) + '</label></div>';
+}
+
+function getInitials(name) {
+  var parts = (name || '').trim().split(/\s+/);
+  if (parts.length > 1) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  return (parts[0] || '?').substring(0, 2).toUpperCase();
+}
+
+// ── Status change handler ──
+function onStatusChange(workerId, status) {
+  // Check if this is the same as the saved status
+  var orig = null;
+  for (var i = 0; i < workers.length; i++) {
+    if (workers[i].worker.id === workerId) { orig = workers[i].status; break; }
+  }
+
+  if (status === orig) {
+    delete changes[workerId];
+  } else {
+    changes[workerId] = status;
+  }
+  updateSubmitBar();
+}
+
+// ── Quick mark all ──
+function markAll(status) {
+  for (var i = 0; i < workers.length; i++) {
+    var wId = workers[i].worker.id;
+    var radio = document.getElementById('att_' + wId + '_' + status);
+    if (radio) {
+      radio.checked = true;
+      onStatusChange(wId, status);
+    }
+  }
+}
+
+function clearAll() {
+  for (var i = 0; i < workers.length; i++) {
+    var wId = workers[i].worker.id;
+    // Uncheck all radios for this worker
+    var radios = document.querySelectorAll('input[name="att_' + wId + '"]');
+    for (var j = 0; j < radios.length; j++) radios[j].checked = false;
+
+    // Re-check original status if any
+    var orig = workers[i].status;
+    if (orig) {
+      var origRadio = document.getElementById('att_' + wId + '_' + orig);
+      if (origRadio) origRadio.checked = true;
+    }
+  }
+  changes = {};
+  updateSubmitBar();
+}
+
+// ── Submit bar ──
+function updateSubmitBar() {
+  var count = Object.keys(changes).length;
+
+  // Also count any new selections for previously unmarked workers
+  var totalToSubmit = 0;
+  for (var i = 0; i < workers.length; i++) {
+    var wId = workers[i].worker.id;
+    var checkedRadio = document.querySelector('input[name="att_' + wId + '"]:checked');
+    if (checkedRadio) totalToSubmit++;
+  }
+
+  var hasChanges = count > 0;
+  $('submitBar').style.display = hasChanges ? 'flex' : 'none';
+  $('changedCount').textContent = count + ' change' + (count !== 1 ? 's' : '');
+}
+
+// ── Submit attendance ──
+async function submitAttendance() {
+  var date = $('dateSelect').value;
+  var shift = $('shiftSelect').value;
+
+  if (!date || !shift) {
+    App.toast('Please select date and shift', 'error');
+    return;
+  }
+
+  // Build records: include all workers that have a selection (changed or existing)
+  var records = [];
+  for (var i = 0; i < workers.length; i++) {
+    var wId = workers[i].worker.id;
+    var checkedRadio = document.querySelector('input[name="att_' + wId + '"]:checked');
+    if (checkedRadio) {
+      records.push({ workerId: wId, status: checkedRadio.value });
+    }
+  }
+
+  if (!records.length) {
+    App.toast('No attendance to save', 'error');
+    return;
+  }
+
+  var btn = $('submitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  try {
+    var res = await App.supFetch('/attendance/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ date: date, shift: shift, records: records })
+    });
+
+    if (!res) { btn.disabled = false; btn.textContent = 'Save Attendance'; return; }
+
+    var data = await res.json();
+    if (data.error) {
+      App.toast(data.error, 'error');
+      btn.disabled = false;
+      btn.textContent = 'Save Attendance';
+      return;
+    }
+
+    // Show success
+    $('mainView').style.display = 'none';
+    $('successView').style.display = 'block';
+    $('successMsg').textContent = 'Marked attendance for ' + records.length + ' worker' + (records.length !== 1 ? 's' : '');
+  } catch (err) {
+    App.toast('Failed to save attendance', 'error');
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Save Attendance';
+}
+
+function resetAfterSave() {
+  $('successView').style.display = 'none';
+  $('mainView').style.display = 'block';
+  changes = {};
+  loadAttendance();
+}
+</script>
+</body>
+</html>

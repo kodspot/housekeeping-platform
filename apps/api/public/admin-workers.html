@@ -56,6 +56,15 @@
 .wk-detail-label{font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:1px}
 .wk-detail-val{font-size:.88rem;font-weight:500;word-break:break-word}
 
+/* ── Floor assignment modal ── */
+.fa-loc-list{display:flex;flex-direction:column;gap:.35rem;max-height:320px;overflow-y:auto}
+.fa-loc{display:flex;align-items:center;gap:.55rem;background:var(--bg);padding:.55rem .7rem;border-radius:var(--radius);cursor:pointer;font-size:.85rem;border:1px solid transparent;transition:border-color .1s}
+.fa-loc:hover{border-color:var(--border)}
+.fa-loc input[type=checkbox]{width:20px;height:20px;accent-color:var(--primary);flex-shrink:0}
+.fa-loc-name{flex:1}
+.fa-loc-parent{font-size:.68rem;color:var(--text-muted)}
+.fa-primary{font-size:.68rem;color:var(--primary);font-weight:600;cursor:pointer;white-space:nowrap}
+
 /* ── Pagination ── */
 .wk-pager{display:flex;gap:.35rem;justify-content:center;align-items:center;padding:.75rem 0}
 .wk-pager button{padding:.3rem .6rem;font-size:.78rem;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);cursor:pointer;min-height:32px;transition:all .15s}
@@ -266,7 +275,22 @@
   </div>
 </div>
 
-<script src="/js/app.js?v=7"></script>
+<!-- Floor Assignment Modal -->
+<div class="modal-overlay" id="floorModal">
+  <div class="modal" style="max-width:480px">
+    <h2 class="modal-title" id="floorTitle">Assign Floors</h2>
+    <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:.65rem">Select floors/locations this worker is assigned to for attendance tracking.</p>
+    <div id="floorError" class="error-msg"></div>
+    <input type="hidden" id="faWorkerId">
+    <div id="floorList" class="fa-loc-list"><div class="loading-center">Loading…</div></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-outline" onclick="App.closeModal('floorModal')">Cancel</button>
+      <button type="button" class="btn btn-primary" id="floorSaveBtn" onclick="saveFloorAssignments()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/app.js?v=8"></script>
 <script src="/js/custom-select.js"></script>
 <script>
 if (!App.initAdmin('workers')) throw '';
@@ -349,6 +373,7 @@ async function loadWorkers(page) {
     var actions = '<div class="wk-actions">' +
       '<button class="btn btn-sm btn-outline" onclick="viewWorker(\'' + w.id + '\')" title="View details">View</button>' +
       '<button class="btn btn-sm btn-outline" onclick="openEdit(\'' + w.id + '\')" title="Edit worker">Edit</button>' +
+      '<button class="btn btn-sm btn-outline" onclick="openFloors(\'' + w.id + '\',\'' + esc(w.name).replace(/'/g, "\\'") + '\')" title="Floor assignments">Floors</button>' +
       '<button class="btn btn-sm btn-outline" onclick="showStats(\'' + w.id + '\',\'' + esc(w.name).replace(/'/g, "\\'") + '\')" title="Cleaning stats">Stats</button>';
 
     if (w.isActive !== false) {
@@ -594,6 +619,89 @@ async function showStats(id, name) {
 
   html += '<div class="wk-stat-footer">Last activity: ' + lastAct + '</div>';
   $('statsContent').innerHTML = html;
+}
+
+/* ── Floor Assignments ── */
+var allLocations = null;
+
+async function loadAllLocations() {
+  if (allLocations) return allLocations;
+  var res = await App.apiFetch('/locations');
+  if (!res) return [];
+  var data = await res.json();
+  allLocations = data.locations || data || [];
+  return allLocations;
+}
+
+async function openFloors(workerId, name) {
+  $('floorTitle').textContent = 'Assign Floors — ' + name;
+  $('faWorkerId').value = workerId;
+  $('floorList').innerHTML = '<div class="loading-center">Loading…</div>';
+  App.hideError('floorError');
+  App.openModal('floorModal');
+
+  var locations = await loadAllLocations();
+  var res = await App.apiFetch('/workers/' + workerId + '/assignments');
+  var assigned = [];
+  if (res && res.ok) {
+    var d = await res.json();
+    assigned = d.assignments || d || [];
+  }
+  var assignedMap = {};
+  for (var i = 0; i < assigned.length; i++) {
+    assignedMap[assigned[i].locationId] = assigned[i].isPrimary || false;
+  }
+
+  if (!locations.length) {
+    $('floorList').innerHTML = '<div style="text-align:center;padding:1rem;color:var(--text-muted);font-size:.85rem">No locations found. Create locations first.</div>';
+    return;
+  }
+
+  var html = '';
+  for (var j = 0; j < locations.length; j++) {
+    var loc = locations[j];
+    var checked = assignedMap[loc.id] !== undefined;
+    html += '<label class="fa-loc">' +
+      '<input type="checkbox" value="' + loc.id + '"' + (checked ? ' checked' : '') + '>' +
+      '<span class="fa-loc-name">' + esc(loc.name) + '</span>' +
+      '<span class="fa-loc-parent">' + esc(loc.type || '') + '</span>' +
+    '</label>';
+  }
+  $('floorList').innerHTML = html;
+}
+
+async function saveFloorAssignments() {
+  var workerId = $('faWorkerId').value;
+  var checkboxes = $('floorList').querySelectorAll('input[type=checkbox]:checked');
+  var locationIds = [];
+  for (var i = 0; i < checkboxes.length; i++) {
+    locationIds.push(checkboxes[i].value);
+  }
+
+  var btn = $('floorSaveBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  App.hideError('floorError');
+
+  try {
+    var res = await App.apiFetch('/workers/' + workerId + '/assignments', {
+      method: 'PUT',
+      body: JSON.stringify({ locationIds: locationIds })
+    });
+    if (!res) { btn.disabled = false; btn.textContent = 'Save'; return; }
+    if (!res.ok) {
+      var d = await res.json();
+      App.showError('floorError', d.error || 'Failed to save');
+      btn.disabled = false; btn.textContent = 'Save';
+      return;
+    }
+    App.closeModal('floorModal');
+    App.toast('Floor assignments updated (' + locationIds.length + ' floor' + (locationIds.length !== 1 ? 's' : '') + ')', 'success');
+  } catch (err) {
+    App.showError('floorError', 'Network error');
+  }
+  btn.disabled = false;
+  btn.textContent = 'Save';
 }
 
 loadWorkers(1);

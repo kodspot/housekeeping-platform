@@ -31,6 +31,8 @@ model Organization {
   auditLogs         AuditLog[]
   notifications     Notification[]
   shiftConfigs      ShiftConfig[]
+  workerAssignments WorkerAssignment[]
+  attendance        Attendance[]
 
   deletedAt  DateTime?
   purgeAfter DateTime?
@@ -65,10 +67,11 @@ model User {
   isActive           Boolean   @default(true)
   tokenInvalidBefore DateTime?
 
-  cleaningRecords CleaningRecord[] @relation("VerifiedBy")
-  ticketsCreated  Ticket[]         @relation("TicketCreatedBy")
-  ticketsAssigned Ticket[]         @relation("TicketAssignedTo")
-  notifications   Notification[]
+  cleaningRecords  CleaningRecord[] @relation("VerifiedBy")
+  ticketsCreated   Ticket[]         @relation("TicketCreatedBy")
+  ticketsAssigned  Ticket[]         @relation("TicketAssignedTo")
+  notifications    Notification[]
+  attendanceMarked Attendance[]     @relation("AttendanceMarkedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -84,23 +87,25 @@ model Worker {
   orgId String
   org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
-  employeeId String?  // Unique worker ID within org (e.g., EMP-001)
-  name       String
-  phone      String?
-  email      String?
-  address    String?
-  department String?  // e.g., "Housekeeping", "Maintenance"
+  employeeId  String? // Unique worker ID within org (e.g., EMP-001)
+  name        String
+  phone       String?
+  email       String?
+  address     String?
+  department  String? // e.g., "Housekeeping", "Maintenance"
   designation String? // e.g., "Room Attendant", "Floor Supervisor"
   dateOfBirth DateTime?
   dateOfJoin  DateTime?
-  gender     String?  // "Male", "Female", "Other"
-  bloodGroup String?
-  aadharNo   String?  // ID proof
-  notes      String?
-  isActive   Boolean  @default(true)
+  gender      String? // "Male", "Female", "Other"
+  bloodGroup  String?
+  aadharNo    String? // ID proof
+  notes       String?
+  isActive    Boolean   @default(true)
 
   cleaningRecords CleaningRecord[]
-  ticketsResolved Ticket[]         @relation("TicketResolvedWorkers")
+  ticketsResolved Ticket[]           @relation("TicketResolvedWorkers")
+  assignments     WorkerAssignment[]
+  attendance      Attendance[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -127,6 +132,7 @@ model Location {
   cleaningRecords   CleaningRecord[]
   cleaningSchedules CleaningSchedule[]
   tickets           Ticket[]
+  workerAssignments WorkerAssignment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -174,11 +180,11 @@ model CleaningRecord {
   status CleaningRecordStatus @default(SUBMITTED)
 
   // Shift validation tracking
-  expectedShift Shift?           // Auto-detected shift based on server time
+  expectedShift Shift? // Auto-detected shift based on server time
   isLate        Boolean @default(false) // Submitted outside the shift window
-  lateReason    String?          // Reason provided when submitting late/cross-shift
+  lateReason    String? // Reason provided when submitting late/cross-shift
 
-  flagReason String?             // Reason provided when admin flags the record
+  flagReason String? // Reason provided when admin flags the record
 
   cleanedAt DateTime @default(now())
   createdAt DateTime @default(now())
@@ -217,18 +223,25 @@ model Ticket {
 
   title       String
   description String?
-  imageUrl         String?
-  priority         TicketPriority @default(NORMAL)
-  status           TicketStatus   @default(OPEN)
-  source           String         @default("INTERNAL") // INTERNAL or PUBLIC
-  guestName        String?
-  guestPhone       String?
-  issueType        String?        // For public: NOT_CLEAN, BAD_SMELL, BROKEN_EQUIPMENT, WATER_ISSUE, PEST, OTHER
+  imageUrl    String?
+  priority    TicketPriority @default(NORMAL)
+  status      TicketStatus   @default(OPEN)
+  source      String         @default("INTERNAL") // INTERNAL or PUBLIC
+  guestName   String?
+  guestPhone  String?
+  issueType   String? // For public: NOT_CLEAN, BAD_SMELL, BROKEN_EQUIPMENT, WATER_ISSUE, PEST, OTHER
 
   resolvedImageUrl String?
   resolvedNote     String?
-  resolvedWorkers  Worker[] @relation("TicketResolvedWorkers")
+  resolvedWorkers  Worker[]  @relation("TicketResolvedWorkers")
   resolvedAt       DateTime?
+
+  // Public review fields
+  reviewToken     String?   @unique
+  reviewExpiresAt DateTime?
+  reviewStatus    String? // PENDING, CONFIRMED, REJECTED
+  reviewNote      String? // Guest comment when confirming/rejecting
+  reviewedAt      DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -268,11 +281,11 @@ model Notification {
   userId String
   user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  type     String   // ticket_assigned, ticket_created, ticket_resolved, public_complaint
+  type     String // ticket_assigned, ticket_created, ticket_resolved, public_complaint
   title    String
   body     String?
-  entityId String?  // ticket id or other entity
-  isRead   Boolean  @default(false)
+  entityId String? // ticket id or other entity
+  isRead   Boolean @default(false)
 
   createdAt DateTime @default(now())
 
@@ -286,10 +299,10 @@ model ShiftConfig {
   org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   shift     Shift
-  startHour Int    // 0-23
-  startMin  Int    @default(0) // 0-59
-  endHour   Int    // 0-23
-  endMin    Int    @default(0) // 0-59
+  startHour Int // 0-23
+  startMin  Int     @default(0) // 0-59
+  endHour   Int // 0-23
+  endMin    Int     @default(0) // 0-59
   isActive  Boolean @default(true)
 
   createdAt DateTime @default(now())
@@ -357,4 +370,57 @@ enum TicketStatus {
   IN_PROGRESS
   RESOLVED
   CLOSED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LEAVE
+  HALF_DAY
+}
+
+model WorkerAssignment {
+  id    String       @id @default(uuid())
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  workerId   String
+  worker     Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  locationId String
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  isPrimary Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workerId, locationId])
+  @@index([orgId])
+  @@index([locationId])
+  @@index([workerId])
+}
+
+model Attendance {
+  id    String       @id @default(uuid())
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  workerId   String
+  worker     Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  markedById String
+  markedBy   User   @relation("AttendanceMarkedBy", fields: [markedById], references: [id])
+
+  date   DateTime         @db.Date
+  shift  Shift
+  status AttendanceStatus
+
+  note String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workerId, date, shift])
+  @@index([orgId, date])
+  @@index([workerId, date])
+  @@index([markedById])
 }

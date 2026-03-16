@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<meta name="theme-color" content="#1a7f64">
+<meta name="referrer" content="no-referrer">
+<title>Review Resolution — Kodspot</title>
+<link rel="stylesheet" href="/css/design-system.css?v=7">
+<style>
+body{background:var(--bg);min-height:100dvh}
+.rv-wrap{max-width:480px;margin:0 auto;padding:1.5rem 1rem}
+.rv-header{text-align:center;margin-bottom:1.5rem}
+.rv-logo{font-size:1.3rem;font-weight:700;color:var(--primary);letter-spacing:-.02em}
+.rv-org{font-size:.78rem;color:var(--text-muted);margin-top:.25rem}
+.rv-loading,.rv-error,.rv-done{text-align:center;padding:3rem 1rem}
+.rv-error{color:var(--danger)}
+
+.rv-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1rem}
+.rv-card h3{font-size:.9rem;font-weight:700;color:var(--text);margin-bottom:.75rem;display:flex;align-items:center;gap:.4rem}
+.rv-label{font-size:.72rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:.25rem}
+.rv-value{font-size:.85rem;color:var(--text);margin-bottom:.75rem}
+.rv-value:last-child{margin-bottom:0}
+
+.rv-proof-img{width:100%;max-height:300px;object-fit:cover;border-radius:var(--radius);margin-top:.5rem;cursor:pointer}
+.rv-proof-img:hover{opacity:.9}
+
+.rv-time{font-size:.72rem;color:var(--text-light);margin-top:.5rem}
+
+.rv-actions{text-align:center;margin-top:1.5rem}
+.rv-actions .btn{width:100%;margin-bottom:.5rem;min-height:var(--touch-min);font-size:.9rem}
+.rv-actions .btn-confirm{background:var(--success);color:#fff;border:none;border-radius:var(--radius);padding:.75rem 1.5rem;font-weight:600;cursor:pointer}
+.rv-actions .btn-confirm:hover{opacity:.9}
+.rv-actions .btn-reject{background:#fff;color:var(--danger);border:2px solid var(--danger);border-radius:var(--radius);padding:.75rem 1.5rem;font-weight:600;cursor:pointer}
+.rv-actions .btn-reject:hover{background:rgba(220,38,38,.04)}
+
+.rv-note-box{margin-top:.75rem;display:none}
+.rv-note-box.show{display:block}
+.rv-note-box textarea{width:100%;min-height:80px;border:1px solid var(--border);border-radius:var(--radius);padding:.6rem;font-size:.82rem;resize:vertical;font-family:inherit}
+
+.rv-timer{font-size:.72rem;color:var(--warning);text-align:center;margin-bottom:1rem;font-weight:500}
+
+.rv-result{text-align:center;padding:2rem 1rem}
+.rv-result-icon{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:50%;margin-bottom:.75rem}
+.rv-result-icon.success{background:#f0fdf4}
+.rv-result-icon.success svg{width:28px;height:28px;stroke:#16a34a;stroke-width:2.5;fill:none}
+.rv-result-icon.info{background:#eff6ff}
+.rv-result-icon.info svg{width:28px;height:28px;stroke:#3b82f6;stroke-width:2.5;fill:none}
+.rv-result-title{font-size:1.1rem;font-weight:700;color:var(--text)}
+.rv-result-sub{font-size:.82rem;color:var(--text-muted);margin-top:.35rem}
+
+.fullscreen-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.9);z-index:9999;align-items:center;justify-content:center;cursor:pointer}
+.fullscreen-overlay.show{display:flex}
+.fullscreen-overlay img{max-width:95%;max-height:95%;object-fit:contain}
+</style>
+</head>
+<body>
+<div class="rv-wrap" id="root">
+  <div class="rv-loading">
+    <div class="spinner" style="margin:0 auto 1rem"></div>
+    <p style="color:var(--text-muted);font-size:.85rem">Loading review...</p>
+  </div>
+</div>
+<div class="fullscreen-overlay" id="fsOverlay" onclick="this.classList.remove('show')">
+  <img id="fsImg" src="" alt="Full size image">
+</div>
+<script>
+(function() {
+  var root = document.getElementById('root');
+  var token = window.location.pathname.split('/review/')[1];
+
+  if (!token) {
+    showError('Invalid review link.');
+    return;
+  }
+
+  // Fetch review data
+  fetch('/api/public/review/' + encodeURIComponent(token))
+    .then(function(r) {
+      if (!r.ok) return r.json().then(function(d) { throw new Error(d.error || 'Not found'); });
+      return r.json();
+    })
+    .then(function(data) {
+      if (data.status === 'already_reviewed') {
+        showAlreadyReviewed(data);
+      } else if (data.status === 'expired') {
+        showExpired(data);
+      } else if (data.status === 'pending') {
+        showReviewForm(data);
+      }
+    })
+    .catch(function(err) {
+      showError(err.message || 'This review link is invalid or has expired.');
+    });
+
+  function esc(s) {
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function timeAgo(date) {
+    var s = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
+    if (s < 60) return 'just now';
+    if (s < 3600) return Math.floor(s / 60) + ' min ago';
+    if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+    return Math.floor(s / 86400) + 'd ago';
+  }
+
+  function showError(msg) {
+    root.innerHTML =
+      '<div class="rv-header"><div class="rv-logo">🏥 Kodspot</div></div>' +
+      '<div class="rv-error">' +
+        '<p style="font-size:1.2rem;margin-bottom:.5rem">😕</p>' +
+        '<p style="font-weight:600">' + esc(msg) + '</p>' +
+      '</div>';
+  }
+
+  function showAlreadyReviewed(data) {
+    var isConfirm = data.reviewStatus === 'CONFIRMED';
+    root.innerHTML =
+      '<div class="rv-header"><div class="rv-logo">🏥 Kodspot</div></div>' +
+      '<div class="rv-result">' +
+        '<div class="rv-result-icon info"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>' +
+        '<div class="rv-result-title">Already Reviewed</div>' +
+        '<div class="rv-result-sub">You\'ve already submitted your review' +
+          (data.reviewedAt ? ' (' + timeAgo(data.reviewedAt) + ')' : '') +
+          '.<br>Status: <strong>' + (isConfirm ? '✅ Confirmed' : '❌ Rejected') + '</strong></div>' +
+        '<div style="margin-top:1rem;font-size:.75rem;color:var(--text-light)">Thank you for your feedback!</div>' +
+      '</div>';
+  }
+
+  function showExpired(data) {
+    root.innerHTML =
+      '<div class="rv-header"><div class="rv-logo">🏥 Kodspot</div></div>' +
+      '<div class="rv-result">' +
+        '<div class="rv-result-icon info"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>' +
+        '<div class="rv-result-title">Review Window Expired</div>' +
+        '<div class="rv-result-sub">' + esc(data.message || 'This review link has expired. The resolution has been automatically accepted.') + '</div>' +
+        '<div style="margin-top:1rem;font-size:.75rem;color:var(--text-light)">If you still have concerns, please scan the QR code again to submit a new complaint.</div>' +
+      '</div>';
+  }
+
+  function showReviewForm(data) {
+    var t = data.ticket;
+    var imgHtml = '';
+    if (t.resolvedImageUrl) {
+      imgHtml = '<img class="rv-proof-img" src="' + esc(t.resolvedImageUrl) + '" alt="Resolution proof" onclick="document.getElementById(\'fsImg\').src=this.src;document.getElementById(\'fsOverlay\').classList.add(\'show\')">';
+    }
+
+    var timerHtml = '';
+    if (data.expiresAt) {
+      timerHtml = '<div class="rv-timer" id="rvTimer"></div>';
+    }
+
+    root.innerHTML =
+      '<div class="rv-header">' +
+        '<div class="rv-logo">🏥 Kodspot</div>' +
+        '<div class="rv-org">' + esc(t.orgName) + '</div>' +
+      '</div>' +
+      timerHtml +
+      '<div class="rv-card">' +
+        '<h3>📋 Your Complaint</h3>' +
+        '<div class="rv-label">Issue</div>' +
+        '<div class="rv-value">' + esc(t.title) + '</div>' +
+        '<div class="rv-label">Location</div>' +
+        '<div class="rv-value">' + esc(t.locationName) + '</div>' +
+        '<div class="rv-time">Filed ' + timeAgo(t.createdAt) + '</div>' +
+      '</div>' +
+      '<div class="rv-card">' +
+        '<h3>✅ Resolution</h3>' +
+        (t.resolvedNote ? '<div class="rv-label">Note from team</div><div class="rv-value">"' + esc(t.resolvedNote) + '"</div>' : '') +
+        (imgHtml ? '<div class="rv-label">Proof photo</div>' + imgHtml : '') +
+        '<div class="rv-time">Resolved ' + timeAgo(t.resolvedAt) + '</div>' +
+      '</div>' +
+      '<div class="rv-card">' +
+        '<h3>🤔 Was this resolved to your satisfaction?</h3>' +
+        '<div class="rv-note-box" id="noteBox">' +
+          '<textarea id="reviewNote" placeholder="Optional: Tell us more..." maxlength="500"></textarea>' +
+        '</div>' +
+        '<div class="rv-actions">' +
+          '<button class="btn-confirm" id="btnConfirm" onclick="submitReview(\'CONFIRM\')">✅ Yes, Looks Good</button>' +
+          '<button class="btn-reject" id="btnReject" onclick="showRejectNote()">❌ Not Resolved</button>' +
+        '</div>' +
+      '</div>';
+
+    // Countdown timer
+    if (data.expiresAt) {
+      startTimer(new Date(data.expiresAt));
+    }
+  }
+
+  function startTimer(expiresAt) {
+    var el = document.getElementById('rvTimer');
+    if (!el) return;
+    function update() {
+      var diff = expiresAt.getTime() - Date.now();
+      if (diff <= 0) {
+        el.textContent = 'Review window has expired';
+        return;
+      }
+      var m = Math.floor(diff / 60000);
+      var s = Math.floor((diff % 60000) / 1000);
+      el.textContent = '⏱ Review window: ' + m + ':' + (s < 10 ? '0' : '') + s + ' remaining';
+      setTimeout(update, 1000);
+    }
+    update();
+  }
+
+  // Global functions for button handlers
+  window.showRejectNote = function() {
+    var box = document.getElementById('noteBox');
+    if (box) {
+      box.classList.add('show');
+      document.getElementById('reviewNote').focus();
+    }
+    // Switch reject button to actual submit
+    var btn = document.getElementById('btnReject');
+    if (btn) {
+      btn.textContent = '❌ Submit: Not Resolved';
+      btn.onclick = function() { submitReview('REJECT'); };
+    }
+  };
+
+  window.submitReview = function(action) {
+    var btnConfirm = document.getElementById('btnConfirm');
+    var btnReject = document.getElementById('btnReject');
+    var noteEl = document.getElementById('reviewNote');
+    var note = noteEl ? noteEl.value.trim() : '';
+
+    // Disable buttons
+    if (btnConfirm) { btnConfirm.disabled = true; btnConfirm.style.opacity = '.5'; }
+    if (btnReject) { btnReject.disabled = true; btnReject.style.opacity = '.5'; }
+
+    var body = { action: action };
+    if (note) body.note = note;
+
+    fetch('/api/public/review/' + encodeURIComponent(token), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    .then(function(r) {
+      if (!r.ok) return r.json().then(function(d) { throw new Error(d.error || 'Failed'); });
+      return r.json();
+    })
+    .then(function(result) {
+      if (action === 'CONFIRM') {
+        root.innerHTML =
+          '<div class="rv-header"><div class="rv-logo">🏥 Kodspot</div></div>' +
+          '<div class="rv-result">' +
+            '<div class="rv-result-icon success"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>' +
+            '<div class="rv-result-title">Thank You!</div>' +
+            '<div class="rv-result-sub">' + esc(result.message) + '</div>' +
+          '</div>';
+      } else {
+        root.innerHTML =
+          '<div class="rv-header"><div class="rv-logo">🏥 Kodspot</div></div>' +
+          '<div class="rv-result">' +
+            '<div class="rv-result-icon info"><svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>' +
+            '<div class="rv-result-title">Feedback Received</div>' +
+            '<div class="rv-result-sub">' + esc(result.message) + '</div>' +
+          '</div>';
+      }
+    })
+    .catch(function(err) {
+      if (btnConfirm) { btnConfirm.disabled = false; btnConfirm.style.opacity = '1'; }
+      if (btnReject) { btnReject.disabled = false; btnReject.style.opacity = '1'; }
+      alert(err.message || 'Something went wrong. Please try again.');
+    });
+  };
+})();
+</script>
+</body>
+</html>

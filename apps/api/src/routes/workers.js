@@ -342,6 +342,115 @@ async function workerRoutes(fastify, opts) {
 
     return { success: true, message: 'Worker permanently deleted' };
   });
+
+  // ── Worker Floor Assignments ──
+
+  // Get assignments for a worker
+  fastify.get('/workers/:id/assignments', {
+    preHandler: [requireRole('ADMIN', 'SUPERVISOR')]
+  }, async (request, reply) => {
+    const { id } = request.params;
+    const worker = await prisma.worker.findFirst({
+      where: { id, orgId: request.user.orgId }
+    });
+    if (!worker) return reply.code(404).send({ error: 'Worker not found' });
+
+    const assignments = await prisma.workerAssignment.findMany({
+      where: { workerId: id, orgId: request.user.orgId },
+      include: { location: { select: { id: true, name: true, type: true, parent: { select: { name: true } } } } },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    return { assignments };
+  });
+
+  // Set assignments for a worker (replace all)
+  fastify.put('/workers/:id/assignments', {
+    preHandler: [requireRole('ADMIN')]
+  }, async (request, reply) => {
+    const { id } = request.params;
+    const orgId = request.user.orgId;
+
+    const schema = z.object({
+      locationIds: z.array(z.string().uuid()),
+      primaryLocationId: z.string().uuid().optional().nullable()
+    });
+
+    const data = schema.parse(request.body);
+
+    const worker = await prisma.worker.findFirst({ where: { id, orgId } });
+    if (!worker) return reply.code(404).send({ error: 'Worker not found' });
+
+    // Validate all locations exist and belong to org
+    if (data.locationIds.length > 0) {
+      const locations = await prisma.location.findMany({
+        where: { id: { in: data.locationIds }, orgId, isActive: true }
+      });
+      if (locations.length !== data.locationIds.length) {
+        return reply.code(400).send({ error: 'One or more locations not found' });
+      }
+    }
+
+    // Delete existing assignments and create new ones
+    await prisma.workerAssignment.deleteMany({ where: { workerId: id, orgId } });
+
+    if (data.locationIds.length > 0) {
+      await prisma.workerAssignment.createMany({
+        data: data.locationIds.map(locId => ({
+          orgId,
+          workerId: id,
+          locationId: locId,
+          isPrimary: locId === data.primaryLocationId
+        }))
+      });
+    }
+
+    await prisma.auditLog.create({
+      data: {
+        orgId,
+        actorType: 'admin',
+        actorId: request.user.id,
+        action: 'worker_assignments_updated',
+        entityType: 'Worker',
+        entityId: id,
+        newValue: { locationIds: data.locationIds, primaryLocationId: data.primaryLocationId }
+      }
+    });
+
+    // Return updated assignments
+    const assignments = await prisma.workerAssignment.findMany({
+      where: { workerId: id, orgId },
+      include: { location: { select: { id: true, name: true, type: true, parent: { select: { name: true } } } } }
+    });
+
+    return { success: true, assignments };
+  });
+
+  // Get workers assigned to a location (floor-centric view)
+  fastify.get('/workers/by-location/:locationId', {
+    preHandler: [requireRole('ADMIN', 'SUPERVISOR')]
+  }, async (request, reply) => {
+    const { locationId } = request.params;
+    const orgId = request.user.orgId;
+
+    const location = await prisma.location.findFirst({ where: { id: locationId, orgId } });
+    if (!location) return reply.code(404).send({ error: 'Location not found' });
+
+    const assignments = await prisma.workerAssignment.findMany({
+      where: { locationId, orgId },
+      include: {
+        worker: {
+          select: { id: true, name: true, employeeId: true, phone: true, isActive: true, department: true }
+        }
+      },
+      orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }]
+    });
+
+    return {
+      location: { id: location.id, name: location.name, type: location.type },
+      workers: assignments.map(a => ({ ...a.worker, isPrimary: a.isPrimary, assignmentId: a.id }))
+    };
+  });
 }
 
 module.exports = workerRoutes;

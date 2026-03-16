@@ -9,8 +9,9 @@ const VALID_MODULES = ['hk', 'ele', 'civil', 'asset', 'complaints'];
 const MODULE_PAGES = [
   'admin-login', 'admin-dashboard', 'admin-analytics', 'admin-locations',
   'admin-workers', 'admin-supervisors', 'admin-cleaning', 'admin-tickets',
-  'admin-audit-logs', 'admin-qr-print',
-  'supervisor-login', 'supervisor-scan', 'supervisor-clean', 'supervisor-tickets'
+  'admin-audit-logs', 'admin-qr-print', 'admin-attendance',
+  'supervisor-login', 'supervisor-scan', 'supervisor-clean', 'supervisor-tickets',
+  'supervisor-attendance'
 ];
 
 // Module metadata for dynamic manifests
@@ -51,6 +52,9 @@ async function pageRoutes(fastify) {
   // QR scan short URL
   fastify.get('/s/:code', sendPage('scan.html'));
   fastify.get('/scan/:code', sendPage('scan.html'));
+
+  // Public review page (token-based, no auth)
+  fastify.get('/review/:token', sendPage('review.html'));
 
   // ── Org landing page: /{org} ──
   fastify.get('/:orgSlug', async (request, reply) => {

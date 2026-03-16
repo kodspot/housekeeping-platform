@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('crypto');
 const { z } = require('zod');
 const { prisma } = require('../lib/prisma');
 const { uploadToR2 } = require('../lib/r2');
@@ -13,6 +14,34 @@ const TICKET_INCLUDE = {
   assignedTo: { select: { id: true, name: true } },
   resolvedWorkers: { select: { id: true, name: true } }
 };
+
+// Strip reviewToken from ticket responses — only expose computed reviewUrl
+function sanitizeTicket(t) {
+  if (t && t.reviewToken) {
+    if (t.reviewStatus === 'PENDING') t.reviewUrl = '/review/' + t.reviewToken;
+    delete t.reviewToken;
+  }
+  return t;
+}
+
+// Lazy auto-close: batch-close PUBLIC tickets whose review window has expired
+async function autoCloseExpiredReviews(orgId) {
+  try {
+    await prisma.ticket.updateMany({
+      where: {
+        orgId,
+        source: 'PUBLIC',
+        reviewStatus: 'PENDING',
+        reviewExpiresAt: { lt: new Date() }
+      },
+      data: {
+        reviewStatus: 'CONFIRMED',
+        status: 'CLOSED',
+        reviewedAt: new Date()
+      }
+    });
+  } catch (err) { console.error('autoCloseExpiredReviews:', err.message); }
+}
 
 async function processImage(request, orgId) {
   const imageFile = request.body.image;
@@ -89,13 +118,17 @@ async function ticketRoutes(fastify, opts) {
       include: TICKET_INCLUDE
     });
 
-    return ticket;
+    return sanitizeTicket(ticket);
   });
 
   // ── List tickets ──
   // Supervisors see tickets assigned to them + unassigned OPEN tickets; Admins see all
   fastify.get('/tickets', async (request) => {
     const orgId = request.user.orgId;
+
+    // Lazy auto-close expired public reviews (non-blocking)
+    autoCloseExpiredReviews(orgId);
+
     const { status, locationId, priority, source, page, limit, search, assignedToId, from, to, pool } = request.query;
 
     const where = { orgId };
@@ -121,10 +154,16 @@ async function ticketRoutes(fastify, opts) {
     if (source) where.source = source;
     if (assignedToId) where.assignedToId = assignedToId;
     if (search) {
-      where.OR = [
+      const searchOR = [
         { title: { contains: search, mode: 'insensitive' } },
         { description: { contains: search, mode: 'insensitive' } }
       ];
+      if (where.OR) {
+        where.AND = [{ OR: where.OR }, { OR: searchOR }];
+        delete where.OR;
+      } else {
+        where.OR = searchOR;
+      }
     }
     if (from || to) {
       where.createdAt = {};
@@ -168,6 +207,7 @@ async function ticketRoutes(fastify, opts) {
       unassignedCount = await prisma.ticket.count({ where: { orgId, assignedToId: null, status: 'OPEN' } });
     }
 
+    for (const t of tickets) sanitizeTicket(t);
     return { tickets, total, page: Math.floor(skip / take) + 1, pages: Math.ceil(total / take), stats, unassignedCount };
   });
 
@@ -184,7 +224,7 @@ async function ticketRoutes(fastify, opts) {
     }
     const ticket = await prisma.ticket.findFirst({ where, include: TICKET_INCLUDE });
     if (!ticket) return reply.code(404).send({ error: 'Ticket not found' });
-    return ticket;
+    return sanitizeTicket(ticket);
   });
 
   // ── Update ticket (Admin only): assign, change status/priority ──
@@ -249,7 +289,7 @@ async function ticketRoutes(fastify, opts) {
       }).catch(() => {});
     }
 
-    return updated;
+    return sanitizeTicket(updated);
   });
 
   // ── Supervisor: Accept ticket (mark IN_PROGRESS) ──
@@ -284,7 +324,7 @@ async function ticketRoutes(fastify, opts) {
       }
     });
 
-    return updated;
+    return sanitizeTicket(updated);
   });
 
   // ── Supervisor: Pick up unassigned ticket (self-assign + mark IN_PROGRESS) ──
@@ -324,7 +364,7 @@ async function ticketRoutes(fastify, opts) {
       entityId: id
     }).catch(() => {});
 
-    return updated;
+    return sanitizeTicket(updated);
   });
 
   // ── Resolve ticket with proof photo (ADMIN or assigned SUPERVISOR) ──
@@ -397,6 +437,13 @@ async function ticketRoutes(fastify, opts) {
       updateData.resolvedWorkers = { connect: workerIdList.map(id => ({ id })) };
     }
 
+    // Generate review token for PUBLIC tickets
+    if (ticket.source === 'PUBLIC') {
+      updateData.reviewToken = crypto.randomBytes(32).toString('hex');
+      updateData.reviewExpiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 min
+      updateData.reviewStatus = 'PENDING';
+    }
+
     const updated = await prisma.ticket.update({
       where: { id },
       data: updateData,
@@ -427,7 +474,12 @@ async function ticketRoutes(fastify, opts) {
       entityId: id
     }).catch(() => {});
 
-    return updated;
+    const response = { ...updated };
+    if (updated.reviewToken) {
+      response.reviewUrl = `/review/${updated.reviewToken}`;
+    }
+    delete response.reviewToken;
+    return response;
   });
 }
 
