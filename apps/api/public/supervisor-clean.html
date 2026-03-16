@@ -9,7 +9,7 @@
 <link rel="manifest" href="/site.webmanifest">
 <meta name="theme-color" content="#1a7f64">
 <title>Submit Cleaning — Kodspot</title>
-<link rel="stylesheet" href="/css/design-system.css?v=5">
+<link rel="stylesheet" href="/css/design-system.css?v=6">
 <style>
 .sv-shell{max-width:540px;margin:0 auto;padding:1.25rem .75rem;min-height:calc(100dvh - 56px)}
 
@@ -90,10 +90,7 @@
     <div class="form-section">
       <div class="form-section-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Shift</div>
       <select class="form-select" id="shift" required onchange="checkShiftMismatch()">
-        <option value="MORNING">Morning (6 AM – 2 PM)</option>
-        <option value="AFTERNOON">Afternoon (2 PM – 10 PM)</option>
-        <option value="NIGHT">Night (10 PM – 6 AM)</option>
-        <option value="GENERAL">General</option>
+        <option value="">Loading shifts…</option>
       </select>
       <div id="shiftWarning" style="display:none;margin-top:.5rem;padding:.55rem .7rem;background:var(--warning-bg);border:1px solid var(--warning);border-radius:var(--radius-sm);font-size:.78rem;color:var(--warning-text)">
         <b>⚠ Cross-shift submission:</b> <span id="shiftWarningText"></span>
@@ -145,12 +142,15 @@
   <a id="scanNextLink" href="/supervisor-scan" class="btn btn-primary btn-block" style="text-decoration:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px"><path d="M3 7V5a2 2 0 012-2h2"/><path d="M17 3h2a2 2 0 012 2v2"/><path d="M21 17v2a2 2 0 01-2 2h-2"/><path d="M7 21H5a2 2 0 01-2-2v-2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg> Scan Next Location</a>
 </div>
 
-<script src="/js/app.js?v=5"></script>
+<script src="/js/app.js?v=6"></script>
 <script src="/js/custom-select.js"></script>
 <script>
 if (!App.initSupervisor()) throw '';
 App.initNotifications(App.supFetch, 'supervisor');
 var esc = App.esc, $ = App.$;
+// Fix org-scoped nav links
+document.querySelectorAll('#sv-nav a').forEach(function(a){ var pg = a.getAttribute('href').replace(/^\//, ''); a.href = App.orgPath(pg); });
+$('scanNextLink').href = App.orgPath('supervisor-scan');
 var locationId = null, photos = [];
 var _submitLabel = $('submitBtn').innerHTML;
 
@@ -176,32 +176,113 @@ if (!locationId && qrParam) {
 if (!locationId) { location.href = App.orgPath('supervisor-scan'); throw ''; }
 $('locName').textContent = decodeURIComponent(locName);
 
-// Auto-select shift based on time
-var hour = new Date().getHours();
-if (hour >= 6 && hour < 14) $('shift').value = 'MORNING';
-else if (hour >= 14 && hour < 22) $('shift').value = 'AFTERNOON';
-else $('shift').value = 'NIGHT';
+// ── Shift config: fetch org timings + room schedule, then set up dropdown ──
+var _shiftConfigs = {}; // { MORNING: {startHour,startMin,endHour,endMin}, ... }
+var _roomShifts = null; // array of required shifts for this room, or null if no schedule
+var shiftLabels = {}; // built dynamically
 
-// Shift mismatch detection
-function getCurrentExpectedShift() {
-  var h = new Date().getHours();
-  if (h >= 6 && h < 14) return 'MORNING';
-  if (h >= 14 && h < 22) return 'AFTERNOON';
-  return 'NIGHT';
+function fmtTime(h, m) { var ap = h >= 12 ? 'PM' : 'AM'; var hh = h % 12 || 12; return hh + (m > 0 ? ':' + ('0'+m).slice(-2) : '') + ap; }
+
+function buildShiftLabel(shift) {
+  var c = _shiftConfigs[shift];
+  if (!c || shift === 'GENERAL') return 'General';
+  var name = shift.charAt(0) + shift.slice(1).toLowerCase();
+  return name + ' (' + fmtTime(c.startHour, c.startMin) + ' – ' + fmtTime(c.endHour, c.endMin) + ')';
 }
-var shiftLabels = { MORNING: 'Morning (6 AM – 2 PM)', AFTERNOON: 'Afternoon (2 PM – 10 PM)', NIGHT: 'Night (10 PM – 6 AM)', GENERAL: 'General' };
+
+function timeInMinutes(h, m) { return h * 60 + m; }
+
+function getExpectedShift() {
+  var now = new Date();
+  var nowMins = timeInMinutes(now.getHours(), now.getMinutes());
+  var checks = ['MORNING', 'AFTERNOON', 'NIGHT'];
+  for (var i = 0; i < checks.length; i++) {
+    var s = checks[i];
+    var c = _shiftConfigs[s];
+    if (!c) continue;
+    var start = timeInMinutes(c.startHour, c.startMin);
+    var end = timeInMinutes(c.endHour, c.endMin);
+    if (end > start) { if (nowMins >= start && nowMins < end) return s; }
+    else if (end < start) { if (nowMins >= start || nowMins < end) return s; }
+  }
+  return 'GENERAL';
+}
 
 function checkShiftMismatch() {
   var selected = $('shift').value;
-  var expected = getCurrentExpectedShift();
+  var expected = getExpectedShift();
   var isMismatch = selected !== 'GENERAL' && selected !== expected;
   $('shiftWarning').style.display = isMismatch ? '' : 'none';
   $('lateReasonWrap').style.display = isMismatch ? '' : 'none';
   if (isMismatch) {
-    $('shiftWarningText').textContent = 'You selected ' + shiftLabels[selected] + ' but the current time falls under ' + shiftLabels[expected] + '. A reason is required.';
+    $('shiftWarningText').textContent = 'You selected ' + (shiftLabels[selected] || selected) + ' but the current time falls under ' + (shiftLabels[expected] || expected) + '. A reason is required.';
   }
 }
-checkShiftMismatch();
+
+async function loadShiftConfig() {
+  // Fetch org shift timings and room schedule in parallel
+  var defaults = {
+    MORNING: { startHour: 6, startMin: 0, endHour: 14, endMin: 0 },
+    AFTERNOON: { startHour: 14, startMin: 0, endHour: 22, endMin: 0 },
+    NIGHT: { startHour: 22, startMin: 0, endHour: 6, endMin: 0 },
+    GENERAL: { startHour: 0, startMin: 0, endHour: 0, endMin: 0 }
+  };
+  _shiftConfigs = Object.assign({}, defaults);
+
+  var results = await Promise.allSettled([
+    App.supFetch('/shift-config'),
+    App.supFetch('/locations/' + locationId + '/schedule')
+  ]);
+
+  // Parse org shift config
+  if (results[0].status === 'fulfilled' && results[0].value && results[0].value.ok) {
+    try {
+      var configs = await results[0].value.json();
+      for (var i = 0; i < configs.length; i++) {
+        var c = configs[i];
+        _shiftConfigs[c.shift] = { startHour: c.startHour, startMin: c.startMin, endHour: c.endHour, endMin: c.endMin };
+      }
+    } catch(e) {}
+  }
+
+  // Parse room schedule (which shifts are required)
+  if (results[1].status === 'fulfilled' && results[1].value && results[1].value.ok) {
+    try {
+      var sched = await results[1].value.json();
+      if (sched.shifts && sched.shifts.length) _roomShifts = sched.shifts;
+    } catch(e) {}
+  }
+
+  // Build shift labels
+  shiftLabels = {
+    MORNING: buildShiftLabel('MORNING'),
+    AFTERNOON: buildShiftLabel('AFTERNOON'),
+    NIGHT: buildShiftLabel('NIGHT'),
+    GENERAL: 'General'
+  };
+
+  // Populate dropdown — if room has a schedule, only show those shifts; otherwise show all
+  var shiftsToShow = _roomShifts || ['MORNING', 'AFTERNOON', 'NIGHT', 'GENERAL'];
+  var sel = $('shift');
+  sel.innerHTML = '';
+  for (var j = 0; j < shiftsToShow.length; j++) {
+    var s = shiftsToShow[j];
+    var opt = document.createElement('option');
+    opt.value = s;
+    opt.textContent = shiftLabels[s] || s;
+    sel.appendChild(opt);
+  }
+
+  // Auto-select the expected shift for current time
+  var expected = getExpectedShift();
+  if (shiftsToShow.indexOf(expected) !== -1) {
+    sel.value = expected;
+  } else if (shiftsToShow.length > 0) {
+    sel.value = shiftsToShow[0];
+  }
+  checkShiftMismatch();
+}
+loadShiftConfig();
 
 // Load workers
 async function loadWorkers() {
@@ -298,8 +379,11 @@ $('cleanForm').addEventListener('submit', async function(e) {
       $('submitBtn').innerHTML = _submitLabel;
       return;
     }
+    App.toast('Cleaning record submitted successfully!', 'success');
     $('formView').style.display = 'none';
     $('successView').style.display = '';
+    // Auto-redirect to scan page after 2 seconds
+    setTimeout(function() { location.href = App.orgPath('supervisor-scan'); }, 2000);
   } catch (err) {
     App.showError('formError', 'Network error. Please try again.');
     $('submitBtn').disabled = false;

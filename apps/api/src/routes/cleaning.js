@@ -233,6 +233,7 @@ async function cleaningRoutes(fastify, opts) {
           location: { select: { id: true, name: true, type: true } },
           supervisor: { select: { id: true, name: true } },
           workers: { select: { id: true, name: true } },
+          images: { select: { id: true, imageUrl: true } },
           _count: { select: { images: true } }
         }
       }),
