@@ -340,16 +340,37 @@ async function analyticsRoutes(fastify, opts) {
 
     // Determine which shifts should be considered overdue by current time
     // Only flag shifts whose window has passed (avoids false positives for future shifts)
-    const currentHour = new Date().getHours();
     const isToday = dayStart.toDateString() === new Date().toDateString();
 
-    // Shift cutoff hours: MORNING ends at 12, AFTERNOON ends at 18, NIGHT ends at 6 (next day)
-    // GENERAL has no fixed window — considered overdue only at end of day (23:00)
-    const SHIFT_CUTOFFS = { MORNING: 12, AFTERNOON: 18, NIGHT: 23, GENERAL: 23 };
+    // Fetch org shift config for accurate shift windows
+    const OD_DEFAULTS = {
+      MORNING:   { startHour: 6, startMin: 0, endHour: 14, endMin: 0 },
+      AFTERNOON: { startHour: 14, startMin: 0, endHour: 22, endMin: 0 },
+      NIGHT:     { startHour: 22, startMin: 0, endHour: 6, endMin: 0 },
+      GENERAL:   { startHour: 0, startMin: 0, endHour: 0, endMin: 0 }
+    };
+    const odShiftRows = await prisma.shiftConfig.findMany({ where: { orgId } });
+    const odConfigs = { ...OD_DEFAULTS };
+    for (const r of odShiftRows) {
+      odConfigs[r.shift] = { startHour: r.startHour, startMin: r.startMin, endHour: r.endHour, endMin: r.endMin };
+    }
 
+    const nowMinsOd = new Date().getHours() * 60 + new Date().getMinutes();
     function isShiftOverdue(shift) {
       if (!isToday) return true; // past dates: all shifts overdue
-      return currentHour >= SHIFT_CUTOFFS[shift];
+      if (shift === 'GENERAL') return nowMinsOd >= 23 * 60; // end of day
+      const c = odConfigs[shift];
+      if (!c) return false;
+      const endMins = c.endHour * 60 + c.endMin;
+      const startMins = c.startHour * 60 + c.startMin;
+      if (endMins > startMins) {
+        // Normal range: overdue once past end time
+        return nowMinsOd >= endMins;
+      } else {
+        // Overnight range (e.g. 22-6): overdue once past end time (next day morning)
+        // At 7AM, NIGHT (22-6) is overdue. At 5AM, NIGHT is still active.
+        return nowMinsOd >= endMins && nowMinsOd < startMins;
+      }
     }
 
     // 1. Fetch all active schedules for this org with location info
@@ -566,34 +587,91 @@ async function analyticsRoutes(fastify, opts) {
     const todayEnd = new Date();
     todayEnd.setHours(23, 59, 59, 999);
 
-    const locations = await prisma.location.findMany({
-      where: { orgId, isActive: true, type: { notIn: ['BUILDING', 'FLOOR'] } },
-      select: {
-        id: true, name: true, type: true,
-        parent: { select: { name: true } },
-        cleaningSchedules: { select: { shifts: true } },
-        cleaningRecords: {
-          where: { cleanedAt: { gte: todayStart, lte: todayEnd } },
-          select: { shift: true, cleanedAt: true, supervisor: { select: { name: true } } },
-          orderBy: { cleanedAt: 'desc' }
-        }
-      },
-      orderBy: [{ type: 'asc' }, { name: 'asc' }]
-    });
+    // Fetch shift configs to know which shifts have started
+    const DEFAULT_SHIFTS = {
+      MORNING:   { startHour: 6, startMin: 0, endHour: 14, endMin: 0 },
+      AFTERNOON: { startHour: 14, startMin: 0, endHour: 22, endMin: 0 },
+      NIGHT:     { startHour: 22, startMin: 0, endHour: 6, endMin: 0 },
+      GENERAL:   { startHour: 0, startMin: 0, endHour: 0, endMin: 0 }
+    };
+    const shiftRows = await prisma.shiftConfig.findMany({ where: { orgId } });
+    const shiftConfigs = { ...DEFAULT_SHIFTS };
+    for (const r of shiftRows) {
+      shiftConfigs[r.shift] = { startHour: r.startHour, startMin: r.startMin, endHour: r.endHour, endMin: r.endMin };
+    }
+
+    // Determine which shifts have started by current time
+    const now = new Date();
+    const nowMins = now.getHours() * 60 + now.getMinutes();
+    function hasShiftStarted(shift) {
+      if (shift === 'GENERAL') return true;
+      const c = shiftConfigs[shift];
+      if (!c) return true;
+      const startMins = c.startHour * 60 + c.startMin;
+      const endMins = c.endHour * 60 + c.endMin;
+      if (endMins > startMins) {
+        // Normal range (e.g. 6:00-14:00): started if now >= start
+        return nowMins >= startMins;
+      } else {
+        // Overnight range (e.g. 22:00-6:00): started if now >= start OR now < end (still in last night's window)
+        return nowMins >= startMins || nowMins < endMins;
+      }
+    }
+
+    const [locations] = await Promise.all([
+      prisma.location.findMany({
+        where: { orgId, isActive: true, type: { notIn: ['BUILDING', 'FLOOR'] } },
+        select: {
+          id: true, name: true, type: true,
+          parent: { select: { name: true } },
+          cleaningSchedules: { select: { shifts: true } },
+          cleaningRecords: {
+            where: { cleanedAt: { gte: todayStart, lte: todayEnd } },
+            select: { shift: true, cleanedAt: true, supervisor: { select: { name: true } } },
+            orderBy: { cleanedAt: 'desc' }
+          }
+        },
+        orderBy: [{ type: 'asc' }, { name: 'asc' }]
+      })
+    ]);
 
     return locations.map(loc => {
       const requiredShifts = loc.cleaningSchedules[0]?.shifts || [];
       const completedShifts = loc.cleaningRecords.map(r => r.shift);
-      const allDone = requiredShifts.length > 0 && requiredShifts.every(s => completedShifts.includes(s));
-      const partial = !allDone && completedShifts.length > 0;
+
+      // Only evaluate shifts that have already started
+      const dueShifts = requiredShifts.filter(s => hasShiftStarted(s));
+      const allDueDone = dueShifts.length > 0 && dueShifts.every(s => completedShifts.includes(s));
+      const someDueDone = !allDueDone && dueShifts.some(s => completedShifts.includes(s));
+      // Also count any completed shifts for shifts not yet due (early cleaning)
+      const hasAnyDone = completedShifts.length > 0;
+
+      let status;
+      if (requiredShifts.length === 0) {
+        status = 'NO_SCHEDULE';
+      } else if (allDueDone && dueShifts.length === requiredShifts.length) {
+        // All shifts due and all done
+        status = 'CLEANED';
+      } else if (allDueDone && dueShifts.length < requiredShifts.length) {
+        // All due shifts done but more shifts coming later — treat as on-track
+        status = 'CLEANED';
+      } else if (someDueDone || hasAnyDone) {
+        status = 'PARTIAL';
+      } else if (dueShifts.length > 0) {
+        status = 'NOT_CLEANED';
+      } else {
+        // No shifts due yet (all scheduled shifts are later in the day)
+        status = 'UPCOMING';
+      }
 
       return {
         id: loc.id,
         name: loc.name,
         type: loc.type,
         parentName: loc.parent?.name || null,
-        status: allDone ? 'CLEANED' : partial ? 'PARTIAL' : (requiredShifts.length > 0 ? 'NOT_CLEANED' : 'NO_SCHEDULE'),
+        status,
         requiredShifts,
+        dueShifts,
         completedShifts,
         lastCleanedAt: loc.cleaningRecords[0]?.cleanedAt || null,
         lastSupervisor: loc.cleaningRecords[0]?.supervisor?.name || null

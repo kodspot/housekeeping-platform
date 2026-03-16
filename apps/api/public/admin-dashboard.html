@@ -9,7 +9,7 @@
 <link rel="manifest" href="/site.webmanifest">
 <meta name="theme-color" content="#1a7f64">
 <title>Dashboard — Kodspot</title>
-<link rel="stylesheet" href="/css/design-system.css?v=6">
+<link rel="stylesheet" href="/css/design-system.css?v=7">
 <style>
 /* ── Dashboard KPI Cards ── */
 .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.75rem;margin-bottom:1.25rem}
@@ -48,6 +48,7 @@
 .rs-partial{background:#fffbeb;border-color:#fde68a}.rs-partial .rs-dot{background:#f59e0b}
 .rs-dirty{background:#fef2f2;border-color:#fecaca}.rs-dirty .rs-dot{background:#ef4444}
 .rs-nosched{background:var(--bg);border-color:var(--border)}.rs-nosched .rs-dot{background:#cbd5e1}
+.rs-upcoming{background:#eff6ff;border-color:#bfdbfe}.rs-upcoming .rs-dot{background:#3b82f6}
 
 /* ── Trend/Bar Chart ── */
 .trend-wrap{display:flex;align-items:flex-end;gap:0;height:140px;padding-top:.5rem}
@@ -310,7 +311,7 @@
   <div class="lightbox-info" id="lbInfo"></div>
 </div>
 
-<script src="/js/app.js?v=6"></script>
+<script src="/js/app.js?v=7"></script>
 <script>
 if (!App.initAdmin('dashboard')) throw '';
 App.initNotifications(App.apiFetch);
@@ -426,15 +427,17 @@ async function loadRoomStatus() {
     $('roomGrid').innerHTML = '<div class="dash-empty"><span class="dash-empty-icon">📍</span><div class="dash-empty-text">No rooms found</div><div class="dash-empty-sub">Add locations to see room status</div></div>';
     return;
   }
-  var c = {CLEANED:0, PARTIAL:0, NOT_CLEANED:0, NO_SCHEDULE:0};
-  for (var i = 0; i < data.length; i++) c[data[i].status]++;
-  $('roomBadge').textContent = c.CLEANED + '/' + data.length + ' cleaned';
+  var c = {CLEANED:0, PARTIAL:0, NOT_CLEANED:0, UPCOMING:0, NO_SCHEDULE:0};
+  for (var i = 0; i < data.length; i++) c[data[i].status] = (c[data[i].status] || 0) + 1;
+  var scheduledTotal = data.length - (c.NO_SCHEDULE || 0);
+  $('roomBadge').textContent = c.CLEANED + '/' + scheduledTotal + ' cleaned';
   $('statusSummary').innerHTML =
     '<span><b style="color:#16a34a">' + c.CLEANED + '</b> Cleaned</span>' +
     '<span><b style="color:#f59e0b">' + c.PARTIAL + '</b> Partial</span>' +
     '<span><b style="color:#ef4444">' + c.NOT_CLEANED + '</b> Pending</span>' +
+    (c.UPCOMING > 0 ? '<span><b style="color:#3b82f6">' + c.UPCOMING + '</b> Upcoming</span>' : '') +
     '<span><b style="color:#94a3b8">' + c.NO_SCHEDULE + '</b> No schedule</span>';
-  var cls = {CLEANED:'rs-cleaned', PARTIAL:'rs-partial', NOT_CLEANED:'rs-dirty', NO_SCHEDULE:'rs-nosched'};
+  var cls = {CLEANED:'rs-cleaned', PARTIAL:'rs-partial', NOT_CLEANED:'rs-dirty', UPCOMING:'rs-upcoming', NO_SCHEDULE:'rs-nosched'};
   $('roomGrid').innerHTML = data.map(function(r) {
     var info = r.lastCleanedAt ? new Date(r.lastCleanedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
     var parent = r.parentName ? r.parentName + ' — ' : '';
