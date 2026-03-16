@@ -687,28 +687,49 @@ async function attendanceRoutes(fastify, opts) {
       rosterByLoc[r.locationId] = r;
     }
 
-    // For admin: include ALL active non-building locations (floors, rooms, etc.)
+    // For admin: get floor-level locations (direct children of buildings) grouped by building
     if (isAdmin) {
-      const allLocations = await prisma.location.findMany({
-        where: { orgId, isActive: true, parentId: { not: null } },
-        select: { id: true, name: true, type: true, parent: { select: { name: true } } },
-        orderBy: [{ parent: { name: 'asc' } }, { name: 'asc' }]
+      // Step 1: get all top-level buildings
+      const buildings = await prisma.location.findMany({
+        where: { orgId, isActive: true, parentId: null },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' }
       });
 
-      const floors = allLocations.map(loc => {
-        const r = rosterByLoc[loc.id];
-        return {
-          id: loc.id,
-          rosterId: r ? r.id : null,
-          name: loc.name,
-          type: loc.type,
-          parentName: loc.parent?.name || null,
-          supervisorName: r ? r.supervisor.name : null,
-          workerCount: r ? r._count.workers : 0
-        };
+      // Step 2: get floor-level locations (direct children of buildings)
+      const buildingIds = buildings.map(b => b.id);
+      const floorLocations = await prisma.location.findMany({
+        where: { orgId, isActive: true, parentId: { in: buildingIds } },
+        select: { id: true, name: true, type: true, parentId: true },
+        orderBy: { name: 'asc' }
       });
 
-      return { floors };
+      // Build building name map
+      const buildingMap = {};
+      for (const b of buildings) buildingMap[b.id] = b.name;
+
+      // Group floors by building
+      const groups = [];
+      for (const b of buildings) {
+        const bFloors = floorLocations.filter(f => f.parentId === b.id);
+        if (!bFloors.length) continue;
+        groups.push({
+          building: b.name,
+          floors: bFloors.map(f => {
+            const r = rosterByLoc[f.id];
+            return {
+              id: f.id,
+              rosterId: r ? r.id : null,
+              name: f.name,
+              type: f.type,
+              supervisorName: r ? r.supervisor.name : null,
+              workerCount: r ? r._count.workers : 0
+            };
+          })
+        });
+      }
+
+      return { groups };
     }
 
     // For supervisor: only rostered floors

@@ -234,7 +234,7 @@ async function loadTodayStats() {
   $('kpiUnmarked').textContent = s.unmarked || 0;
 }
 
-// ── Floors dropdown (all floors for admin, rostered ones annotated) ──
+// ── Floors dropdown (grouped by building for admin) ──
 async function loadFloors() {
   var date = $('dailyDate').value, shift = $('dailyShift').value;
   var url = '/attendance/floors';
@@ -243,17 +243,22 @@ async function loadFloors() {
   var res = await App.apiFetch(url);
   if (!res) return;
   var data = await res.json();
-  var floors = data.floors || [];
   floorRosterMap = {};
 
   var curDaily = $('dailyFloor').value;
   var opts = '<option value="">All Floors</option>';
-  for (var i = 0; i < floors.length; i++) {
-    var f = floors[i];
-    var label = f.parentName ? f.parentName + ' \u2192 ' + f.name : f.name;
-    if (f.supervisorName) label += ' \u2014 ' + f.supervisorName + ' (' + f.workerCount + ')';
-    opts += '<option value="' + esc(f.id) + '">' + esc(label) + '</option>';
-    if (f.rosterId) floorRosterMap[f.id] = f.rosterId;
+  var groups = data.groups || [];
+  for (var g = 0; g < groups.length; g++) {
+    var grp = groups[g];
+    opts += '<optgroup label="' + esc(grp.building) + '">';
+    for (var i = 0; i < grp.floors.length; i++) {
+      var f = grp.floors[i];
+      var label = f.name;
+      if (f.supervisorName) label += ' \u2014 ' + f.supervisorName + ' (' + f.workerCount + ')';
+      opts += '<option value="' + esc(f.id) + '">' + esc(label) + '</option>';
+      if (f.rosterId) floorRosterMap[f.id] = f.rosterId;
+    }
+    opts += '</optgroup>';
   }
   $('dailyFloor').innerHTML = opts;
   if (curDaily) $('dailyFloor').value = curDaily;
