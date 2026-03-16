@@ -199,7 +199,6 @@
 if (!App.initAdmin('admin-attendance')) throw '';
 var esc = App.esc, $ = App.$;
 var activeTab = 'daily';
-var floorRosterMap = {};
 
 // ── Init ──
 (async function init() {
@@ -243,7 +242,6 @@ async function loadFloors() {
   var res = await App.apiFetch(url);
   if (!res) return;
   var data = await res.json();
-  floorRosterMap = {};
 
   var curDaily = $('dailyFloor').value;
   var opts = '<option value="">All Floors</option>';
@@ -256,7 +254,6 @@ async function loadFloors() {
       var label = f.name;
       if (f.supervisorName) label += ' \u2014 ' + f.supervisorName + ' (' + f.workerCount + ')';
       opts += '<option value="' + esc(f.id) + '">' + esc(label) + '</option>';
-      if (f.rosterId) floorRosterMap[f.id] = f.rosterId;
     }
     opts += '</optgroup>';
   }
@@ -321,9 +318,7 @@ async function loadDaily() {
 
   var url = '/attendance?date=' + encodeURIComponent(date) + '&shift=' + encodeURIComponent(shift);
   if (locationId) {
-    var rosterId = floorRosterMap[locationId];
-    if (rosterId) url += '&rosterId=' + encodeURIComponent(rosterId);
-    else url += '&locationId=' + encodeURIComponent(locationId);
+    url += '&locationId=' + encodeURIComponent(locationId);
   }
 
   var res = await App.apiFetch(url);

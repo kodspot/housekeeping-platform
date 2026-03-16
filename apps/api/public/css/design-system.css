@@ -1399,6 +1399,12 @@ tr:hover td { background: rgba(14,165,164,.02); }
   .form-row { grid-template-columns: 1fr 1fr; }
 }
 
+/* ── Supervisor nav: icon-only on small phones ── */
+@media (max-width: 480px) {
+  .sv-nav-link { font-size: 0; line-height: 0; gap: 0; padding: .4rem; }
+  .sv-nav-link svg { width: 18px; height: 18px; }
+}
+
 /* ── Narrow desktops (1025px–1279px): tighter inline nav ── */
 @media (min-width: 1025px) and (max-width: 1279px) {
   .topbar-nav a { padding: .35rem .5rem; font-size: .8rem; }

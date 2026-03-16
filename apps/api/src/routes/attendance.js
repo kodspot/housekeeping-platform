@@ -681,10 +681,14 @@ async function attendanceRoutes(fastify, opts) {
       orderBy: [{ location: { parent: { name: 'asc' } } }, { location: { name: 'asc' } }]
     });
 
-    // Build roster map keyed by locationId
+    // Build roster map keyed by locationId (aggregate across multiple supervisors)
     const rosterByLoc = {};
     for (const r of rosters) {
-      rosterByLoc[r.locationId] = r;
+      if (!rosterByLoc[r.locationId]) {
+        rosterByLoc[r.locationId] = { supervisors: [], totalWorkers: 0 };
+      }
+      rosterByLoc[r.locationId].supervisors.push(r.supervisor.name);
+      rosterByLoc[r.locationId].totalWorkers += r._count.workers;
     }
 
     // For admin: get floor-level locations (direct children of buildings) grouped by building
@@ -716,14 +720,13 @@ async function attendanceRoutes(fastify, opts) {
         groups.push({
           building: b.name,
           floors: bFloors.map(f => {
-            const r = rosterByLoc[f.id];
+            const info = rosterByLoc[f.id];
             return {
               id: f.id,
-              rosterId: r ? r.id : null,
               name: f.name,
               type: f.type,
-              supervisorName: r ? r.supervisor.name : null,
-              workerCount: r ? r._count.workers : 0
+              supervisorName: info ? info.supervisors.join(', ') : null,
+              workerCount: info ? info.totalWorkers : 0
             };
           })
         });
